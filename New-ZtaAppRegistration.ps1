@@ -29,6 +29,13 @@ $delegatedScopes = @(
 Import-Module Microsoft.Graph.Applications -ErrorAction Stop
 if (-not (Get-MgContext)) { Connect-MgGraph -Scopes 'Application.ReadWrite.All','Directory.Read.All' -NoWelcome }
 
+$ctx = Get-MgContext
+$org = (Invoke-MgGraphRequest -Method GET -Uri 'v1.0/organization').value[0]
+Write-Host ''
+Write-Host "Tenant:  $($org.displayName) ($($ctx.TenantId))" -ForegroundColor Cyan
+Write-Host "Ran as:  $($ctx.Account)" -ForegroundColor Cyan
+Write-Host ''
+
 $graphSp = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
 $access = foreach ($s in $delegatedScopes) {
     $perm = $graphSp.Oauth2PermissionScopes | Where-Object Value -eq $s
