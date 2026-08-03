@@ -49,7 +49,13 @@ while (-not $sp) {
     Read-Host 'Service principal not found — grant consent via the URL above, then press Enter to re-check'
     $sp = Get-MgServicePrincipal -Filter "appId eq '$ClientId'"
 }
-Write-Host "✓ Consent OK — service principal $($sp.Id)"
+Write-Host "✓ Consent OK — app '$($sp.DisplayName)', service principal $($sp.Id)"
+if ($sp.DisplayName -notlike '*Automation*') {
+    Write-Warning "'$($sp.DisplayName)' does not look like the ZTA-Automation app. If this is the delegated"
+    Write-Warning 'web app (ZTA (Limon-IT)), abort and re-run with the ZTA-Automation appId — the scheduled'
+    Write-Warning 'runs authenticate as ZTA-Automation and need the grant/role on THAT service principal.'
+    if ((Read-Host 'Continue anyway? (y/N)') -ne 'y') { return }
+}
 
 # ---------- 1. site ----------
 if ($ExistingSiteUrl) {
@@ -124,5 +130,5 @@ $entry = [ordered]@{
 Write-Host "`n=== Add this to automation/customers.json ===" -ForegroundColor Green
 $entry | ConvertTo-Json
 
-Write-Host "`nOptional (Azure log-export checks): give the service principal 'Reader' on the"
-Write-Host 'customer subscription(s): az role assignment create --assignee <spId> --role Reader --scope /subscriptions/<id>'
+Write-Host "`nOptional (Azure log-export checks): give the service principal 'Reader' on the customer subscription(s):"
+Write-Host "  az role assignment create --assignee $($sp.Id) --role Reader --scope /subscriptions/<subscription-id>"
