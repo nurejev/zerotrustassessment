@@ -89,6 +89,10 @@ main{max-width:1180px;margin:0 auto;padding:28px 24px 80px}
 @media(max-width:840px){.ovgrid{grid-template-columns:1fr}}
 .ovgrid3{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:14px;margin-bottom:22px}
 @media(max-width:980px){.ovgrid3{grid-template-columns:1fr}}
+.ovgrid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+@media(max-width:980px){.ovgrid2{grid-template-columns:1fr}}
+.sankey-lbl{font-size:11px;font-weight:600;fill:var(--ink)}
+.sankey-val{font-size:10px;fill:var(--muted)}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .tile{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--soft2)}
 .tile b{font-size:22px;display:block;letter-spacing:-.02em}
@@ -248,6 +252,19 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
       <p class="mini" style="margin-top:10px">v1 covers a curated subset of Microsoft's 328 checks. Full coverage runs monthly via the automation.</p>
     </div>
   </div>
+
+  <div class="ovgrid2">
+    <div class="panel" id="adminAuthPanel" style="display:none">
+      <h3>🔐 Privileged users auth methods</h3>
+      <div id="adminAuthSankey"></div>
+      <p class="mini" style="margin-top:8px" id="adminAuthCaption">Strongest authentication method registered by privileged users.</p>
+    </div>
+    <div class="panel" id="signinPanel" style="display:none">
+      <h3>👤 User authentication</h3>
+      <div id="signinSankey"></div>
+      <p class="mini" style="margin-top:8px" id="signinCaption"></p>
+    </div>
+  </div>
   </div><!-- /ovDash -->
 
   <div id="checksView" style="display:none">
@@ -333,8 +350,8 @@ const CONFIG = {
   spScope: 'Sites.ReadWrite.All',
   pimScope: 'RoleManagement.Read.Directory',   // PIM eligibility check, optional (403 → skip)
   reportScope: 'AuditLog.Read.All',            // MFA registration report, optional (403 → skip)
-  version: '0.2',
-  build: '2026.08.03-3'          // bump on every deploy — shown on sign-in + footer, à la ENCA
+  version: '0.3',
+  build: '2026.08.03-4'          // bump on every deploy — shown on sign-in + footer, à la ENCA
 };
 
 /* ================= CHECKS (pure, testable) ================= */
@@ -590,6 +607,33 @@ function compareRuns(prev, cur){
   for(const t of (prev.checks||prev.tests||[])) if(!cm[t.id]) removed.push(t);
   return {regressed,fixed,added,removed};
 }
+/* --- dashboard aggregations (pure) --- */
+function aggAdminAuth(list){
+  if(!Array.isArray(list)) return null;
+  const a={total:list.length, pr:0, ph:0, sf:0, m:{passkey:0,whfb:0,cert:0,auth:0,phone:0}};
+  for(const u of list){
+    const ms=(u.methodsRegistered||[]).join(' ').toLowerCase();
+    const has=re=>re.test(ms);
+    if(u.isMfaCapable===false && !ms){ a.sf++; continue; }
+    if(has(/passkey|fido2/)){ a.pr++; a.m.passkey++; }
+    else if(has(/windowshello/)){ a.pr++; a.m.whfb++; }
+    else if(has(/certificate/)){ a.pr++; a.m.cert++; }
+    else if(has(/authenticator/)){ a.ph++; a.m.auth++; }
+    else if(has(/phone|sms|voice|email/)){ a.ph++; a.m.phone++; }
+    else a.sf++;
+  }
+  return a.total?a:null;
+}
+function aggSignIns(list){
+  if(!Array.isArray(list)||!list.length) return null;
+  const a={total:list.length, ca:0, nca:0, mfa:0, nomfa:0, partial:!!list.partial};
+  for(const s of list){
+    const applied=['success','failure'].includes(s.conditionalAccessStatus);
+    if(applied){ a.ca++; if(s.authenticationRequirement==='multiFactorAuthentication') a.mfa++; else a.nomfa++; }
+    else a.nca++;
+  }
+  return a;
+}
 /*ZTA-CHECKS-END*/
 
 /* ================= DEMO DATA ================= */
@@ -631,7 +675,21 @@ const DEMO = {
           {displayName:'consultant@tailwind.nl', externalUserState:'Accepted', createdDateTime:'2026-06-01T00:00:00Z'}],
   pimGA:[],
   regReport:{totalUserCount:1284, userRegistrationFeatureCounts:[{feature:'mfaCapable',userCount:1042}]},
-  counts:{users:1284, guests:23, groups:214, devices:611}
+  counts:{users:1284, guests:23, groups:214, devices:611},
+  regDetails:[
+    {methodsRegistered:['passKeyDeviceBound'], isMfaCapable:true},
+    {methodsRegistered:['windowsHelloForBusiness','microsoftAuthenticatorPush'], isMfaCapable:true},
+    {methodsRegistered:['microsoftAuthenticatorPush'], isMfaCapable:true},
+    {methodsRegistered:['microsoftAuthenticatorPush','mobilePhone'], isMfaCapable:true},
+    {methodsRegistered:['microsoftAuthenticatorPush'], isMfaCapable:true},
+    {methodsRegistered:['mobilePhone'], isMfaCapable:true},
+    {methodsRegistered:['mobilePhone'], isMfaCapable:true},
+    {methodsRegistered:[], isMfaCapable:false}
+  ],
+  signins:[].concat(
+    Array(46).fill({conditionalAccessStatus:'notApplied', authenticationRequirement:'singleFactorAuthentication'}),
+    Array(38).fill({conditionalAccessStatus:'success',   authenticationRequirement:'multiFactorAuthentication'}),
+    Array(16).fill({conditionalAccessStatus:'success',   authenticationRequirement:'singleFactorAuthentication'}))
 };
 /*ZTA-DEMO-END*/
 
@@ -717,6 +775,10 @@ async function runAssessment(){
         ['guests', async()=>{ const g=await graphGET("/users?$filter=userType eq 'Guest'&$select=id,displayName,externalUserState,createdDateTime&$top=999",null,{maxPages:5}); return g; }],
         ['pimGA', ()=>graphGET("/roleManagement/directory/roleEligibilitySchedules?$filter=roleDefinitionId eq '62e90394-69f5-4237-9190-012177145e10'",[...CONFIG.baseScopes,CONFIG.pimScope])],
         ['regReport', ()=>graphGET('/reports/authenticationMethods/usersRegisteredByFeature',[...CONFIG.baseScopes,CONFIG.reportScope])],
+        ['regDetails', ()=>graphGET("/reports/authenticationMethods/userRegistrationDetails?$filter=isAdmin eq true&$top=999",[...CONFIG.baseScopes,CONFIG.reportScope])],
+        ['signins', ()=>{ const since=new Date(Date.now()-30*86400000).toISOString();
+          return graphGET(`/auditLogs/signIns?$filter=createdDateTime ge ${since}&$select=conditionalAccessStatus,authenticationRequirement&$top=999`,
+            [...CONFIG.baseScopes,CONFIG.reportScope],{maxPages:5}); }],
         ['counts', async()=>{ const c=async p=>{ const t=await getToken(CONFIG.baseScopes);
             const r=await fetch('https://graph.microsoft.com/v1.0'+p,{headers:{Authorization:'Bearer '+t,ConsistencyLevel:'eventual'}});
             return r.ok?parseInt(await r.text()):null; };
@@ -740,7 +802,7 @@ async function runAssessment(){
     prog(95,'Rendering report…');
     RESULTS={app:'zta-web', version:CONFIG.version, build:CONFIG.build, executedAt:new Date().toISOString(),
       tenantId:D.tenantId, tenantName:D.tenantName, account:D.account||'', demo:DEMO_MODE,
-      counts:D.counts||null, checks};
+      counts:D.counts||null, viz:{adminAuth:aggAdminAuth(D.regDetails), signins:aggSignIns(D.signins)}, checks};
     setTimeout(()=>{ prog(100); renderReport(); show('report'); }, 400);
   } catch(e){ log('✗ '+(e.message||e),'err'); prog(0,'Failed — see log'); }
 }
@@ -781,11 +843,65 @@ function renderReport(){
       <span class="seg-p" style="width:${p/tot*100}%"></span><span class="seg-f" style="width:${f/tot*100}%"></span>
       <span class="seg-i" style="width:${i/tot*100}%"></span><span class="seg-s" style="width:${s/tot*100}%"></span>
       </div><span class="pct"><b>${p}/${tot-s}</b> tests</span></div>`;}).join('');
+  renderSankeys(R);
   const seg=$('pillarSeg'); seg.innerHTML='';
   ['Overview',...pillars].forEach(pl=>{const b=document.createElement('button'); b.textContent=pl;
     if(pl===curPillar) b.className='active';
     b.onclick=()=>setTab(pl,b); seg.appendChild(b);});
   setTab(curPillar);
+}
+/* --- mini sankey (3 columns, SVG, no libs) --- */
+function drawSankey(el, nodes, links){
+  const W=640,H=250,NW=10,GAP=14,X=[20,300,520];
+  const cols=[[],[],[]]; nodes.forEach(n=>cols[n.col].push(n));
+  const colSum=cols.map(c=>c.reduce((s,n)=>s+n.value,0));
+  const scale=(H-40)/Math.max(...colSum,1);
+  for(const c of cols){ let y=(H-(c.reduce((s,n)=>s+n.value,0)*scale+(c.length-1)*GAP))/2;
+    for(const n of c){ n.h=Math.max(n.value*scale,3); n.y=y; y+=n.h+GAP; n.so=0; n.to=0; } }
+  const byId={}; nodes.forEach(n=>byId[n.id]=n);
+  let paths='';
+  for(const l of links){
+    const s=byId[l.s], t=byId[l.t]; if(!s||!t||!l.v) continue;
+    const h1=l.v/s.value*s.h, h2=l.v/t.value*t.h;
+    const sx=X[s.col]+NW, sy=s.y+s.so, tx=X[t.col], ty=t.y+t.to;
+    const mx=(sx+tx)/2;
+    paths+=`<path d="M${sx},${sy} C${mx},${sy} ${mx},${ty} ${tx},${ty} L${tx},${ty+h2} C${mx},${ty+h2} ${mx},${sy+h1} ${sx},${sy+h1} Z" fill="${t.color}" opacity=".30"/>`;
+    s.so+=h1; t.to+=h2;
+  }
+  let rects='';
+  for(const n of nodes){
+    rects+=`<rect x="${X[n.col]}" y="${n.y}" width="${NW}" height="${n.h}" rx="2" fill="${n.color}"/>`;
+    const lx=X[n.col]+NW+6;
+    rects+=`<text x="${lx}" y="${n.y+Math.min(n.h/2+4,n.h+10)}" class="sankey-lbl">${n.label} <tspan class="sankey-val">${n.value}</tspan></text>`;
+  }
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${paths}${rects}</svg>`;
+}
+const SK={green:'#3f7a24', lemon:'#dfb32b', orange:'#a04d0b', red:'#b04a3a', deep:'#8f2f1f', ink:'#1e4729'};
+function renderSankeys(R){
+  const a=R.viz?.adminAuth;
+  $('adminAuthPanel').style.display=a?'':'none';
+  if(a){
+    const nodes=[{id:'u',label:'Privileged users',value:a.total,color:SK.ink,col:0}], links=[];
+    if(a.pr){nodes.push({id:'pr',label:'Phish resistant',value:a.pr,color:SK.green,col:1}); links.push({s:'u',t:'pr',v:a.pr});}
+    if(a.ph){nodes.push({id:'ph',label:'Phishable',value:a.ph,color:SK.lemon,col:1}); links.push({s:'u',t:'ph',v:a.ph});}
+    if(a.sf){nodes.push({id:'sf',label:'Single factor',value:a.sf,color:SK.red,col:1}); links.push({s:'u',t:'sf',v:a.sf});}
+    const m=[['passkey','Passkey/FIDO2',SK.green,'pr'],['whfb','WHfB',SK.green,'pr'],['cert','Certificate',SK.green,'pr'],
+             ['auth','Authenticator',SK.orange,'ph'],['phone','Phone/SMS',SK.orange,'ph']];
+    for(const [k,lbl,col,src] of m) if(a.m[k]){ nodes.push({id:k,label:lbl,value:a.m[k],color:col,col:2}); links.push({s:src,t:k,v:a.m[k]}); }
+    if(a.sf){ nodes.push({id:'pw',label:'Password only',value:a.sf,color:SK.deep,col:2}); links.push({s:'sf',t:'pw',v:a.sf}); }
+    drawSankey($('adminAuthSankey'), nodes, links);
+  }
+  const s=R.viz?.signins;
+  $('signinPanel').style.display=s?'':'none';
+  if(s){
+    const nodes=[{id:'si',label:'User sign in',value:s.total,color:SK.ink,col:0}], links=[];
+    if(s.nca){nodes.push({id:'nca',label:'No CA applied',value:s.nca,color:SK.red,col:1}); links.push({s:'si',t:'nca',v:s.nca});}
+    if(s.ca){nodes.push({id:'ca',label:'CA applied',value:s.ca,color:SK.lemon,col:1}); links.push({s:'si',t:'ca',v:s.ca});}
+    if(s.mfa){nodes.push({id:'mfa',label:'MFA',value:s.mfa,color:SK.green,col:2}); links.push({s:'ca',t:'mfa',v:s.mfa});}
+    if(s.nomfa){nodes.push({id:'nomfa',label:'No MFA',value:s.nomfa,color:SK.deep,col:2}); links.push({s:'ca',t:'nomfa',v:s.nomfa});}
+    drawSankey($('signinSankey'), nodes, links);
+    $('signinCaption').textContent=`Over the last 30 days (${s.partial?'sample of ':''}${s.total} sign-ins), ${Math.round(s.mfa/s.total*100)}% were protected by Conditional Access enforcing multifactor.`;
+  }
 }
 function setTab(pl, btn){
   curPillar=pl;
