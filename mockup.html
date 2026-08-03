@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZTA · Zero Trust Assessment · Limon-IT — MOCKUP</title>
+<style>
+/* ===== ENCA design language (css/app.css palette + shapes) ===== */
+:root{
+  --ink:#12331f; --green:#1e4729; --green-deep:#12331f; --accent2:#3f7a24;
+  --lemon:#f7d65a; --lemon-deep:#dfb32b; --muted:#5f7a67; --border:#dbe7de;
+  --surface:#ffffff; --bg:#f2f7f3; --soft:#eaf3ec; --radius:16px;
+  --shadow:0 10px 30px rgba(18,51,31,.10);
+  --on:#3f7a24; --off:#b04a3a; --report:#b8860b;
+  --hover:#fafdf9; --line:#f0f5f1; --soft2:#f6faf7; --glow:#cdeed4;
+  --ok-bg:#e5f3d9; --ok-bd:#c3e0ad;
+  --warn-bg:#fdf3c9; --warn-bd:#eeda8e; --warn-fg:#8a6d0b;
+  --bad-bg:#f7e3df; --bad-bd:#eec4bc;
+  --crit-bg:#f7dfdb; --crit-fg:#8f2f1f; --high-bg:#fbe6d4; --high-fg:#a04d0b;
+  --blue:#1f4e8f; --blue-bg:#dde9f7; --na:#cdd8d0;
+  color-scheme:light;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+button{font-family:inherit;cursor:pointer}
+a{color:var(--accent2)}
+.muted{color:var(--muted)} .mini{font-size:12px;color:var(--muted)}
+
+header{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.hwrap{max-width:1180px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:10px}
+.logo b{font-size:17px;letter-spacing:-.02em}
+.logo b span{color:var(--accent2)}
+.logo-mark{width:34px;height:34px;border-radius:9px;background:var(--green);color:var(--lemon);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.app-tag{background:var(--soft);color:var(--green);font-weight:600;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--border)}
+.spacer{flex:1}
+.tenant{display:none;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.tenant.show{display:flex}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+.btn{border:1px solid var(--border);background:var(--surface);color:var(--ink);padding:8px 16px;border-radius:10px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+.btn:hover{border-color:var(--accent2)}
+.btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn.lemon{background:var(--lemon);border-color:var(--lemon-deep);color:var(--green-deep)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+main{max-width:1180px;margin:0 auto;padding:28px 24px 80px}
+.screen{display:none}.screen.active{display:block}
+#screen-login.active,#screen-run.active{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 180px)}
+
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:48px;max-width:500px;text-align:center;
+  background-image:radial-gradient(500px 260px at 85% -80px,var(--glow) 0%,transparent 60%)}
+.login-card h1{font-size:24px;margin:18px 0 8px;letter-spacing:-.02em}
+.login-card p{color:var(--muted);line-height:1.55;margin-bottom:26px}
+.ms-btn{width:100%;justify-content:center;padding:12px;font-size:14px}
+.login-note{margin-top:20px;font-size:12px;color:var(--muted);line-height:1.5}
+
+/* run screen */
+.run-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:36px 40px;max-width:640px;width:100%}
+.run-card h1{font-size:21px;margin-bottom:6px;letter-spacing:-.02em}
+.pillar-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:20px 0}
+.pillar-opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--border);border-radius:12px;padding:12px 14px;cursor:pointer;background:var(--surface);transition:.12s}
+.pillar-opt:hover{background:var(--hover)}
+.pillar-opt.sel{background:var(--soft);border-color:var(--accent2)}
+.pillar-opt input{margin-top:3px;accent-color:var(--green)}
+.pillar-opt b{font-size:13.5px}
+.pillar-opt .mini{display:block;margin-top:2px}
+.scopebox{background:var(--soft2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:18px}
+.scopebox code{background:var(--soft);padding:1px 6px;border-radius:6px;font-size:11px}
+.progress-wrap{margin-top:6px}
+.pbar{height:10px;background:var(--soft);border-radius:999px;overflow:hidden}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--green));border-radius:999px;transition:width .35s}
+.plog{margin-top:14px;background:var(--green-deep);color:#cfe3d4;border-radius:12px;padding:14px 16px;font:11.5px/1.7 ui-monospace,Menlo,Consolas,monospace;height:170px;overflow:hidden;text-align:left}
+.plog .ok{color:#9fd48a}.plog .dim{color:#7d9c88}
+
+/* report */
+.rephead{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px}
+.rephead h1{font-size:23px;letter-spacing:-.02em}
+.rephead .mini{padding-bottom:3px}
+.seg{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:8px 16px;font-weight:600;font-size:13px;color:var(--muted)}
+.seg button.active{background:var(--green);color:#fff}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:10px;position:sticky;top:58px;z-index:40;background:var(--bg);padding:12px 0;margin:0 0 6px;box-shadow:0 6px 12px -8px rgba(18,51,31,.15)}
+.tb-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+.search{flex:1;min-width:200px;position:relative}
+.search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:10px;font:inherit;background:var(--surface)}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);opacity:.45}
+.fchip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
+.fchip.active{background:var(--soft);color:var(--green);border-color:var(--accent2)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px}
+.scard .num{font-size:28px;font-weight:700;letter-spacing:-.03em}
+.scard .lbl{font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
+.scard.f .num{color:var(--off)} .scard.p .num{color:var(--on)} .scard.i .num{color:var(--report)}
+
+.ovgrid{display:grid;grid-template-columns:340px 1fr;gap:14px;margin-bottom:22px}
+@media(max-width:840px){.ovgrid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px}
+.panel h3{font-size:14px;margin-bottom:14px}
+.tinfo{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+.tinfo .k{color:var(--muted)}
+.pillarbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.pillarbar .nm{width:74px;font-weight:600;font-size:13px}
+.pillarbar .track{flex:1;height:10px;background:var(--soft);border-radius:999px;overflow:hidden;display:flex}
+.pillarbar .seg-p{background:var(--accent2)}.pillarbar .seg-f{background:var(--off)}.pillarbar .seg-i{background:var(--lemon-deep)}.pillarbar .seg-s{background:var(--na)}
+.pillarbar .pct{width:88px;text-align:right;font-size:12px;color:var(--muted)}
+
+.list-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+table.plist{width:100%;border-collapse:collapse}
+table.plist th{background:var(--soft);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--border)}
+table.plist td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+table.plist tr:last-child td{border-bottom:0}
+table.plist tbody tr{cursor:pointer}
+table.plist tbody tr:hover td{background:var(--hover)}
+.tname{font-weight:600}
+.tid{font-size:11px;color:var(--muted);font-weight:500}
+.state{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+.state.pass{background:var(--ok-bg);color:var(--on);border-color:var(--ok-bd)}
+.state.fail{background:var(--bad-bg);color:var(--off);border-color:var(--bad-bd)}
+.state.inv{background:var(--warn-bg);color:var(--warn-fg);border-color:var(--warn-bd)}
+.state.skip{background:var(--soft2);color:var(--muted);border-color:var(--border)}
+.risk{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.risk.high{background:var(--high-bg);color:var(--high-fg)}
+.risk.med{background:var(--warn-bg);color:var(--warn-fg)}
+.risk.low{background:var(--blue-bg);color:var(--blue)}
+.ps-tag{font-size:10.5px;font-weight:700;background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:999px;margin-left:6px;white-space:nowrap}
+
+/* detail drawer */
+.overlay{position:fixed;inset:0;background:rgba(18,51,31,.35);z-index:100;display:none}
+.overlay.show{display:block}
+.drawer{position:fixed;top:0;right:-720px;width:min(700px,94vw);height:100vh;background:var(--surface);z-index:101;box-shadow:-16px 0 44px rgba(18,51,31,.22);transition:right .25s;display:flex;flex-direction:column}
+.drawer.show{right:0}
+.dhead{padding:22px 26px 16px;border-bottom:1px solid var(--border)}
+.dhead h2{font-size:18px;letter-spacing:-.01em;line-height:1.35;padding-right:40px}
+.dclose{position:absolute;top:16px;right:16px;border:0;background:none;font-size:20px;color:var(--muted);width:32px;height:32px;border-radius:8px}
+.dclose:hover{background:var(--soft)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.chip{font-size:11px;font-weight:600;background:var(--soft);color:var(--green);border:1px solid var(--border);padding:3px 10px;border-radius:999px}
+.dbody{padding:20px 26px;overflow-y:auto;flex:1;line-height:1.6;font-size:13.5px}
+.dbody h4{font-size:13px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.dbody h4:first-child{margin-top:0}
+.dbody ul{margin:0 0 8px 18px}
+.dbody li{margin-bottom:5px}
+.evi{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+.evi th{background:var(--soft);text-align:left;padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.evi td{padding:7px 10px;border-bottom:1px solid var(--line)}
+.dfoot{padding:14px 26px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center}
+
+/* demo controls */
+.demo-nav{position:fixed;bottom:16px;right:16px;z-index:200;background:var(--green-deep);color:#fff;border-radius:12px;padding:8px 10px;display:flex;gap:6px;align-items:center;box-shadow:var(--shadow);font-size:12px}
+.demo-nav b{margin-right:4px;opacity:.7;font-weight:600}
+.demo-nav button{border:1px solid rgba(255,255,255,.25);background:none;color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600}
+.demo-nav button:hover{background:rgba(255,255,255,.15)}
+.mock-banner{background:var(--lemon);color:var(--green-deep);text-align:center;font-size:12px;font-weight:700;padding:5px}
+footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="mock-banner">MOCKUP — zerotrustassessment.limon-it.nl · look &amp; feel proposal · sample data, nothing is real</div>
+
+<header>
+  <div class="hwrap">
+    <div class="logo"><div class="logo-mark">L</div><b>Limon-<span>IT</span></b></div>
+    <span class="app-tag">ZTA · Zero Trust Assessment</span>
+    <span class="mini muted">zerotrustassessment.limon-it.nl</span>
+    <div class="spacer"></div>
+    <button class="btn" title="Theme">🌗</button>
+    <div class="tenant" id="tenantBox">
+      <div><div style="font-weight:600">Contoso B.V.</div><div class="mini">admin@contoso.nl</div></div>
+      <div class="avatar">CA</div>
+      <button class="btn" onclick="go('login')">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ 1 · SIGN IN ============ -->
+<section id="screen-login" class="screen active">
+  <div class="login-card">
+    <div class="logo-mark" style="width:76px;height:76px;font-size:34px;border-radius:18px;margin:0 auto">L</div>
+    <h1>Zero Trust Assessment</h1>
+    <p>Run Microsoft's Zero Trust Assessment against your tenant — straight from the browser. Hundreds of read-only checks across Identity, Devices, Network, Data, AI and SecOps, with remediation guidance for every finding.</p>
+    <button class="btn primary ms-btn" onclick="go('run')">
+      <svg width="17" height="17" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+      Sign in with Microsoft
+    </button>
+    <div class="login-note">
+      Multi-tenant · read-only Microsoft Graph permissions, requested per pillar<br>
+      Runs entirely in your browser — no tenant data leaves your session.
+    </div>
+    <div class="login-note">Based on the open-source <a href="https://github.com/microsoft/zerotrustassessment">Microsoft Zero Trust Assessment</a> · brought to the web by Limon-IT</div>
+    <div class="login-note"><a href="#" onclick="go('report');return false">View a demo report with sample data →</a></div>
+  </div>
+</section>
+
+<!-- ============ 2 · SCOPE + RUN ============ -->
+<section id="screen-run" class="screen">
+  <div class="run-card">
+    <div id="runSetup">
+      <h1>Run the assessment</h1>
+      <p class="mini" style="margin-bottom:4px">Choose the pillars to test. Permissions are requested per pillar the first time — read-only, and only when you need them.</p>
+      <div class="pillar-grid" id="pillarGrid">
+        <label class="pillar-opt sel"><input type="checkbox" checked><span><b>🪪 Identity</b> <span class="mini">135 checks · Entra ID, Conditional Access, apps &amp; consent</span></span></label>
+        <label class="pillar-opt sel"><input type="checkbox" checked><span><b>💻 Devices</b> <span class="mini">43 checks · Intune compliance, enrollment, LAPS</span></span></label>
+        <label class="pillar-opt sel"><input type="checkbox" checked><span><b>🌐 Network</b> <span class="mini">67 checks · Global Secure Access, named locations</span></span></label>
+        <label class="pillar-opt"><input type="checkbox"><span><b>🗄 Data &amp; AI</b> <span class="mini">21 checks · Purview subset + AI posture</span></span></label>
+        <label class="pillar-opt"><input type="checkbox"><span><b>🛰 SecOps</b> <span class="mini">18 checks · detections, log export (needs Azure sign-in)</span></span></label>
+        <label class="pillar-opt" style="opacity:.75"><input type="checkbox" disabled><span><b>⚙️ Exchange / SharePoint / Purview DLP</b> <span class="mini">41 checks — PowerShell-only, shown in the report as “run locally”</span></span></label>
+      </div>
+      <div class="scopebox">
+        <b>Will be requested now:</b> <code>Policy.Read.All</code> <code>Directory.Read.All</code> <code>Reports.Read.All</code> <code>DeviceManagementConfiguration.Read.All</code> <code>NetworkAccess.Read.All</code> +6 more · all delegated, all read-only.<br>
+        First run needs one-time admin consent (Global Administrator). Re-runs work as Global Reader / Security Reader.
+      </div>
+      <button class="btn primary ms-btn" onclick="startRun()">▶ Start assessment — 245 checks selected</button>
+    </div>
+    <div id="runProgress" style="display:none">
+      <h1>Assessing Contoso B.V. …</h1>
+      <p class="mini" style="margin-bottom:14px">Read-only. You can keep this tab in the background; results stream in as checks finish.</p>
+      <div class="progress-wrap">
+        <div class="pbar"><i id="pbarFill"></i></div>
+        <div class="mini" style="display:flex;justify-content:space-between;margin-top:6px"><span id="pPhase">Fetching datasets…</span><span id="pPct">0%</span></div>
+      </div>
+      <div class="plog" id="plog"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3 · REPORT ============ -->
+<section id="screen-report" class="screen">
+  <div class="rephead">
+    <h1>Zero Trust Assessment — Contoso B.V.</h1>
+    <span class="mini">run 27 Jul 2026 14:32 · 245 web checks + 41 local-only · engine parity: upstream main@e1f4c02</span>
+    <div class="tb-actions">
+      <button class="btn" onclick="alert('Mock: standalone HTML report download')">⬇ HTML report</button>
+      <button class="btn" onclick="alert('Mock: results JSON for compare')">⬇ JSON</button>
+      <button class="btn lemon" onclick="go('run')">↻ Re-run</button>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="scard p"><div class="num">178</div><div class="lbl">Passed</div></div>
+    <div class="scard f"><div class="num">49</div><div class="lbl">Failed</div></div>
+    <div class="scard i"><div class="num">18</div><div class="lbl">Investigate</div></div>
+    <div class="scard"><div class="num" style="color:var(--muted)">41</div><div class="lbl">Run locally (PowerShell-only)</div></div>
+    <div class="scard"><div class="num">73<span style="font-size:16px;color:var(--muted)">%</span></div><div class="lbl">Zero Trust score (passed / testable)</div></div>
+  </div>
+
+  <div class="ovgrid">
+    <div class="panel">
+      <h3>Tenant</h3>
+      <div class="tinfo">
+        <span class="k">Tenant</span><span>Contoso B.V. · contoso.onmicrosoft.com</span>
+        <span class="k">Tenant ID</span><span style="font-family:ui-monospace,monospace;font-size:12px">7d2f…-…-…-…-…a91c</span>
+        <span class="k">Type</span><span>Workforce</span>
+        <span class="k">Licenses</span><span>Entra ID P2 · Intune P1 · E5 Security</span>
+        <span class="k">Users</span><span>1,284 (23 guests)</span>
+        <span class="k">Ran as</span><span>admin@contoso.nl · Global Reader</span>
+      </div>
+      <h3 style="margin-top:20px">Top risks to fix first</h3>
+      <div class="mini" style="line-height:2">
+        <span class="risk high">High</span> Legacy authentication not fully blocked<br>
+        <span class="risk high">High</span> Inactive apps hold privileged Graph permissions<br>
+        <span class="risk high">High</span> No phishing-resistant MFA for privileged roles
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Result per pillar</h3>
+      <div id="pillarBars"></div>
+      <p class="mini" style="margin-top:8px">Grey = PowerShell-only checks, not testable from the browser — the report lists the exact local command for each.</p>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" placeholder="Search 286 checks… e.g. break-glass, LAPS, legacy auth" oninput="renderRows()">
+    </div>
+    <div class="seg" id="pillarSeg"></div>
+    <span class="fchip active" data-st="all" onclick="setSt(this)">All</span>
+    <span class="fchip" data-st="fail" onclick="setSt(this)">Failed</span>
+    <span class="fchip" data-st="inv" onclick="setSt(this)">Investigate</span>
+    <span class="fchip" data-st="pass" onclick="setSt(this)">Passed</span>
+    <span class="fchip" data-st="skip" onclick="setSt(this)">Run locally</span>
+  </div>
+
+  <div class="list-card">
+    <table class="plist">
+      <thead><tr><th style="width:46%">Check</th><th>Pillar</th><th>Risk</th><th>User impact</th><th>Status</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p class="mini" style="margin-top:10px">Showing a sample of the 328 upstream checks. Every check keeps its Microsoft TestId, so findings link straight to Microsoft's remediation docs.</p>
+</section>
+
+</main>
+
+<footer>ZTA mockup · Limon-IT · engine based on the MIT-licensed <a href="https://github.com/microsoft/zerotrustassessment">microsoft/zerotrustassessment</a> · sibling of <a href="https://enca.limon-it.nl">ENCA</a></footer>
+
+<!-- detail drawer -->
+<div class="overlay" id="ovl" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="dhead" style="position:relative">
+    <button class="dclose" onclick="closeDrawer()">✕</button>
+    <h2 id="dTitle"></h2>
+    <div class="chips" id="dChips"></div>
+  </div>
+  <div class="dbody" id="dBody"></div>
+  <div class="dfoot">
+    <button class="btn primary" onclick="alert('Mock: opens learn.microsoft.com remediation page')">📘 Microsoft remediation docs</button>
+    <button class="btn" onclick="alert('Mock: copy finding as Markdown')">Copy as Markdown</button>
+    <span class="mini" style="margin-left:auto" id="dRef"></span>
+  </div>
+</aside>
+
+<div class="demo-nav"><b>▶ demo</b>
+  <button onclick="go('login')">1 Sign-in</button>
+  <button onclick="go('run')">2 Run</button>
+  <button onclick="go('report')">3 Report</button>
+</div>
+
+<script>
+/* ---------- screens ---------- */
+function go(s){
+  document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+  document.getElementById('screen-'+s).classList.add('active');
+  document.getElementById('tenantBox').classList.toggle('show', s!=='login');
+  if(s==='run'){document.getElementById('runSetup').style.display='';document.getElementById('runProgress').style.display='none';}
+  window.scrollTo(0,0);
+}
+/* pillar option toggle look */
+document.querySelectorAll('.pillar-opt input:not([disabled])').forEach(cb=>{
+  cb.addEventListener('change',()=>cb.closest('.pillar-opt').classList.toggle('sel',cb.checked));
+});
+
+/* ---------- fake run ---------- */
+const LOG=[["dim","→ consent ok · 11 delegated read scopes granted"],
+["ok","✓ dataset users (1,284) · 3 Graph pages"],
+["ok","✓ dataset servicePrincipals (412) · applications (97)"],
+["ok","✓ dataset conditionalAccessPolicies (24)"],
+["ok","✓ dataset authenticationMethodsPolicy · authorizationPolicy"],
+["ok","✓ dataset deviceManagement: compliancePolicies (9) · configurationPolicies (31)"],
+["ok","✓ dataset networkAccess: forwardingProfiles · filteringPolicies"],
+["dim","→ evaluating Identity · 135 checks"],
+["ok","✓ 21772 Break-glass accounts excluded from CA … passed"],
+["ok","✗ 21770 Inactive apps with privileged Graph permissions … failed"],
+["ok","✗ 21796 Legacy authentication blocked … failed"],
+["dim","→ evaluating Devices · 43 checks"],
+["ok","✓ 22105 Compliance policy assigned to all platforms … passed"],
+["dim","→ evaluating Network · 67 checks"],
+["dim","→ rendering report…"]];
+function startRun(){
+  document.getElementById('runSetup').style.display='none';
+  document.getElementById('runProgress').style.display='';
+  const log=document.getElementById('plog'),fill=document.getElementById('pbarFill'),
+        pct=document.getElementById('pPct'),ph=document.getElementById('pPhase');
+  log.innerHTML='';let i=0;
+  const t=setInterval(()=>{
+    if(i<LOG.length){const d=document.createElement('div');d.className=LOG[i][0];d.textContent=LOG[i][1];log.appendChild(d);log.scrollTop=1e6;}
+    const p=Math.min(100,Math.round((i+1)/LOG.length*100));
+    fill.style.width=p+'%';pct.textContent=p+'%';
+    ph.textContent=p<40?'Fetching datasets…':p<90?'Evaluating checks…':'Rendering report…';
+    if(++i>LOG.length){clearInterval(t);setTimeout(()=>go('report'),500);}
+  },420);
+}
+
+/* ---------- sample results ---------- */
+const T=[
+ {id:21770,n:"Inactive applications don't have highly privileged Microsoft Graph API permissions",p:"Identity",r:"med",u:"High",st:"fail",
+  d:"3 applications with no sign-in activity in 90+ days hold high-privilege Graph application permissions. Dormant apps with standing privileges are a favourite persistence path after credential theft.",
+  ev:[["❌ Contoso-Migration-2021","High","Directory.ReadWrite.All","never"],["❌ HR-Sync-Legacy","High","User.ReadWrite.All","2025-11-02"],["❌ TestApp-Old","Unranked","Mail.Read (app)","never"]],
+  rem:["Disable or delete the three applications, or remove their application permissions.","Introduce an app-permission review cadence (quarterly) via access reviews.","Prefer managed identities + least-privilege scopes for automation."]},
+ {id:21796,n:"Legacy authentication is blocked for all users",p:"Identity",r:"high",u:"Med",st:"fail",
+  d:"Conditional Access blocks legacy auth for most users, but the policy 'CA004 – Block legacy auth' excludes the group SVC-Legacy-Mail (7 members). Legacy protocols bypass MFA entirely.",
+  ev:[["❌ CA004 Block legacy auth","enabled","excludes SVC-Legacy-Mail (7 users)",""],["✅ Sign-in logs","", "312 legacy auth attempts blocked / 30 days",""]],
+  rem:["Migrate the 7 service mailboxes to OAuth-capable clients or app passwords → then remove the exclusion.","Set Exchange Online to reject basic auth tenant-wide as defence in depth."]},
+ {id:21781,n:"Privileged roles require phishing-resistant multifactor authentication",p:"Identity",r:"high",u:"Med",st:"fail",
+  d:"No Conditional Access policy enforces a phishing-resistant authentication strength (FIDO2 / passkey / CBA) for the 14 privileged role holders. 4 Global Admins currently rely on SMS.",
+  ev:[["❌ Global Administrator","4 of 6 use SMS/voice","no auth-strength policy",""],["❌ Privileged Role Admin","2 holders","no auth-strength policy",""]],
+  rem:["Create CA policy: directory roles → require authentication strength 'Phishing-resistant MFA'.","Register passkeys for all privileged users first; roll out report-only, then enable."]},
+ {id:21772,n:"Emergency access accounts are excluded from Conditional Access policies",p:"Identity",r:"high",u:"Low",st:"pass",
+  d:"Both break-glass accounts are excluded from all 24 CA policies and monitored for sign-ins.",
+  ev:[["✅ BreakGlass-01","excluded from 24/24 policies","",""],["✅ BreakGlass-02","excluded from 24/24 policies","",""]],
+  rem:["Keep alerting on any break-glass sign-in (already configured)."]},
+ {id:21810,n:"Guest access is restricted to least privilege",p:"Identity",r:"med",u:"Low",st:"pass",
+  d:"Guest user access is set to 'restricted' and guest invites are limited to specific admin roles.",ev:[],rem:[]},
+ {id:21833,n:"User consent to applications is restricted",p:"Identity",r:"high",u:"Med",st:"inv",
+  d:"User consent is limited to verified publishers for low-risk permissions, but 11 previously user-consented grants pre-date the policy and need review.",
+  ev:[["⚠ 11 legacy grants","user-consented before 2025-03","review needed",""]],
+  rem:["Review the 11 grants in Enterprise applications → Consent and permissions.","Enable the admin consent workflow so users have a sanctioned path."]},
+ {id:22105,n:"Device compliance policies are assigned to all platforms in use",p:"Devices",r:"high",u:"Med",st:"pass",
+  d:"Compliance policies cover Windows, iOS, Android and macOS; all 9 policies assigned, 94% device compliance.",ev:[],rem:[]},
+ {id:22118,n:"Windows LAPS is enabled for local administrator accounts",p:"Devices",r:"high",u:"Low",st:"fail",
+  d:"No Intune policy enables Windows LAPS. Local admin passwords are unmanaged on 611 Windows devices — lateral-movement risk if one device is compromised.",
+  ev:[["❌ Windows devices","611","no LAPS policy assigned",""]],
+  rem:["Create an Intune account-protection LAPS policy (backup to Entra, 30-day rotation).","Verify with the LAPS report after first check-in cycle."]},
+ {id:22131,n:"Personal Windows devices are blocked from enrollment",p:"Devices",r:"med",u:"Med",st:"inv",
+  d:"Enrollment restrictions block personal Windows enrollment, but 17 personally-owned Windows devices enrolled before the restriction remain active.",
+  ev:[["⚠ Existing personal devices","17","enrolled pre-restriction",""]],
+  rem:["Decide retire-vs-tolerate for the 17 devices; retire removes corporate data only."]},
+ {id:23204,n:"Global Secure Access forwarding profiles are enabled",p:"Network",r:"med",u:"Med",st:"fail",
+  d:"No GSA traffic-forwarding profile is enabled; Microsoft 365 traffic is not acquired by the Zero Trust network layer.",
+  ev:[["❌ Microsoft traffic profile","disabled","",""],["❌ Private access profile","not configured","",""]],
+  rem:["Enable the Microsoft traffic forwarding profile and pilot with one device group.","Pair with CA policy requiring compliant network."]},
+ {id:23219,n:"Named locations are defined and used in Conditional Access",p:"Network",r:"low",u:"Low",st:"pass",
+  d:"6 named locations defined; trusted-location logic used by 9 policies.",ev:[],rem:[]},
+ {id:24310,n:"Sign-in and audit logs are exported to a Log Analytics workspace",p:"SecOps",r:"high",u:"Low",st:"inv",
+  d:"Diagnostic settings export sign-in logs, but audit-log export could not be verified — the Azure checks pillar was not selected in this run.",
+  ev:[["⚠ Audit log export","unverified","re-run with the SecOps pillar (Azure sign-in)",""]],
+  rem:["Re-run with the SecOps pillar enabled, or verify diagnostic settings in the portal."]},
+ {id:25101,n:"AI apps: Copilot web grounding is governed",p:"AI",r:"med",u:"Low",st:"pass",
+  d:"Copilot web search grounding matches the documented baseline.",ev:[],rem:[]},
+ {id:26001,n:"External mail forwarding is disabled",p:"Data",r:"high",u:"Low",st:"skip",ps:true,
+  d:"This check needs Exchange Online PowerShell (Get-HostedOutboundSpamFilterPolicy) — not callable from a browser.",
+  ev:[],rem:["Run locally:  Connect-ExchangeOnline; Get-HostedOutboundSpamFilterPolicy | fl AutoForwardingMode","Or run the full official module: Install-Module ZeroTrustAssessment; Invoke-ZtAssessment"]},
+ {id:26014,n:"DLP policies protect sensitive information types",p:"Data",r:"high",u:"Med",st:"skip",ps:true,
+  d:"Needs Security & Compliance PowerShell — not exposed via Graph. Listed here so the gap stays visible.",
+  ev:[],rem:["Run locally: Connect-IPPSSession; Get-DlpCompliancePolicy"]}
+];
+const PILLARS=["Overview","Identity","Devices","Network","Data","AI","SecOps"];
+let curPillar="Overview",curSt="all";
+
+/* pillar tabs */
+const segEl=document.getElementById('pillarSeg');
+PILLARS.forEach(p=>{const b=document.createElement('button');b.textContent=p;if(p==="Overview")b.className="active";
+  b.onclick=()=>{curPillar=p;segEl.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRows();};
+  segEl.appendChild(b);});
+
+function setSt(el){curSt=el.dataset.st;document.querySelectorAll('.fchip').forEach(x=>x.classList.remove('active'));el.classList.add('active');renderRows();}
+
+const RL={high:"High",med:"Medium",low:"Low"},SL={pass:["pass","Passed"],fail:["fail","Failed"],inv:["inv","Investigate"],skip:["skip","Run locally"]};
+function renderRows(){
+  const q=(document.getElementById('q').value||"").toLowerCase();
+  const tb=document.getElementById('rows');tb.innerHTML="";
+  T.filter(t=>(curPillar==="Overview"||t.p===curPillar)&&(curSt==="all"||t.st===curSt)&&(!q||t.n.toLowerCase().includes(q)||String(t.id).includes(q)))
+   .forEach(t=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><div class="tname">${t.n}${t.ps?'<span class="ps-tag">PowerShell-only</span>':''}</div><div class="tid">ZT-${t.id}</div></td>
+      <td>${t.p}</td><td><span class="risk ${t.r}">${RL[t.r]}</span></td><td class="mini">${t.u}</td>
+      <td><span class="state ${SL[t.st][0]}">${SL[t.st][1]}</span></td>`;
+    tr.onclick=()=>openDrawer(t);
+    tb.appendChild(tr);
+  });
+}
+renderRows();
+
+/* pillar bars on overview */
+const BARS=[["Identity",135,86,28,12,9],["Devices",43,30,8,3,2],["Network",67,44,10,3,10],["Data",7,2,0,0,5],["AI",14,10,2,0,2],["SecOps",18,6,1,0,11]];
+document.getElementById('pillarBars').innerHTML=BARS.map(([n,tot,p,f,i,s])=>{
+  const pc=Math.round(p/(tot-s)*100);
+  return `<div class="pillarbar"><span class="nm">${n}</span><div class="track">
+    <span class="seg-p" style="width:${p/tot*100}%"></span><span class="seg-f" style="width:${f/tot*100}%"></span>
+    <span class="seg-i" style="width:${i/tot*100}%"></span><span class="seg-s" style="width:${s/tot*100}%"></span>
+  </div><span class="pct">${pc}% · ${tot} checks</span></div>`;}).join("");
+
+/* drawer */
+function openDrawer(t){
+  document.getElementById('dTitle').textContent=t.n;
+  document.getElementById('dRef').textContent="Microsoft TestId ZT-"+t.id;
+  document.getElementById('dChips').innerHTML=
+    `<span class="state ${SL[t.st][0]}">${SL[t.st][1]}</span><span class="risk ${t.r}">Risk: ${RL[t.r]}</span>`+
+    `<span class="chip">Pillar: ${t.p}</span><span class="chip">User impact: ${t.u}</span><span class="chip">Implementation: Low</span><span class="chip">License: Entra ID P1</span>`;
+  let h=`<h4>What was tested</h4><p>${t.d}</p>`;
+  if(t.ev.length){h+=`<h4>Evidence</h4><table class="evi"><tr><th>Item</th><th>Detail</th><th>Note</th><th>Last activity</th></tr>`+
+    t.ev.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")+`</table>`;}
+  if(t.rem.length){h+=`<h4>Recommended actions</h4><ul>`+t.rem.map(r=>`<li>${r}</li>`).join("")+`</ul>`;}
+  document.getElementById('dBody').innerHTML=h;
+  document.getElementById('ovl').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+}
+function closeDrawer(){document.getElementById('ovl').classList.remove('show');document.getElementById('drawer').classList.remove('show');}
+document.addEventListener('keydown',e=>{if(e.key==="Escape")closeDrawer();});
+</script>
+</body>
+</html>

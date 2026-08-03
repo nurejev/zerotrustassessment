@@ -1,0 +1,129 @@
+# Zero Trust Assessment — scheduled multi-customer runs
+# Repo MUST be private. Secrets live in the 'assessment' environment:
+#   ZTA_CLIENT_ID, ZTA_PFX_BASE64, ZTA_PFX_PASSWORD, optional TEAMS_WEBHOOK_* per customer.
+name: assess
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'    # weekly  — Mondays 04:00 UTC (customers with schedule: weekly)
+    - cron: '0 4 1 * *'    # monthly — 1st of month 04:00 UTC (schedule: monthly + weekly)
+  workflow_dispatch:
+    inputs:
+      customer:
+        description: 'Customer name from customers.json (empty = all)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      customers: ${{ steps.pick.outputs.customers }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        shell: pwsh
+        run: |
+          $all = Get-Content automation/customers.json -Raw | ConvertFrom-Json
+          $isMonthly = ('${{ github.event.schedule }}' -eq '0 4 1 * *')
+          $pick = switch ('${{ github.event_name }}') {
+            'workflow_dispatch' {
+              if ('${{ inputs.customer }}') { $all | Where-Object name -eq '${{ inputs.customer }}' } else { $all } }
+            default { if ($isMonthly) { $all } else { $all | Where-Object schedule -eq 'weekly' } }
+          }
+          "customers=$(@($pick) | ConvertTo-Json -Compress -AsArray)" >> $env:GITHUB_OUTPUT
+
+  assess:
+    needs: matrix
+    if: needs.matrix.outputs.customers != '[]'
+    runs-on: windows-latest        # DuckDB needs VCRedist; full module support is Windows
+    environment: assessment
+    strategy:
+      matrix:
+        customer: ${{ fromJson(needs.matrix.outputs.customers) }}
+      max-parallel: 1              # serialise: git commits per customer must not race
+      fail-fast: false
+    name: assess ${{ matrix.customer.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Import certificate
+        shell: pwsh
+        run: |
+          $pfx = [Convert]::FromBase64String('${{ secrets.ZTA_PFX_BASE64 }}')
+          $tmp = Join-Path $env:RUNNER_TEMP 'zta.pfx'
+          [IO.File]::WriteAllBytes($tmp, $pfx)
+          $pw = ConvertTo-SecureString '${{ secrets.ZTA_PFX_PASSWORD }}' -AsPlainText -Force
+          Import-PfxCertificate -FilePath $tmp -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          Remove-Item $tmp
+
+      - name: Install modules
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module ZeroTrustAssessment, Microsoft.Graph.Authentication -Scope CurrentUser
+
+      - name: Run assessment (app-only CBA)
+        shell: pwsh
+        run: |
+          Import-Module ZeroTrustAssessment
+          Connect-ZtAssessment -ClientId '${{ secrets.ZTA_CLIENT_ID }}' `
+            -TenantId '${{ matrix.customer.tenantId }}' -Certificate 'CN=ZeroTrustAssessment'
+          Invoke-ZtAssessment -Path "$env:RUNNER_TEMP\zt"
+
+      - name: Extract results summary + drift
+        id: drift
+        shell: pwsh
+        run: |
+          $slug = '${{ matrix.customer.name }}' -replace '[^A-Za-z0-9]', '-'
+          $date = Get-Date -Format 'yyyy-MM-dd'
+          ./automation/scripts/Export-ZtaResultsJson.ps1 `
+            -ReportHtmlPath "$env:RUNNER_TEMP\zt\ZeroTrustAssessmentReport.html" `
+            -OutJsonPath "results/$slug/$date.json"
+          $prev = Get-ChildItem "results/$slug" -Filter '*.json' -ErrorAction SilentlyContinue |
+                  Where-Object Name -ne "$date.json" | Sort-Object Name | Select-Object -Last 1
+          ./automation/scripts/Compare-ZtaResults.ps1 `
+            -PreviousJsonPath $prev.FullName -CurrentJsonPath "results/$slug/$date.json" `
+            -OutMarkdownPath "drift/$slug/$date.md"
+          "slug=$slug" >> $env:GITHUB_OUTPUT
+          "date=$date" >> $env:GITHUB_OUTPUT
+
+      - name: Commit results + drift (history = drift control)
+        shell: pwsh
+        run: |
+          git config user.name 'zta-bot'
+          git config user.email 'zta-bot@limon-it.nl'
+          git pull --rebase
+          git add results drift
+          git commit -m "assess: ${{ matrix.customer.name }} ${{ steps.drift.outputs.date }} (${{ steps.drift.outputs.failed }} failed, ${{ steps.drift.outputs.regressions }} regressions)" || echo 'nothing to commit'
+          git push
+
+      - name: Deliver to customer SharePoint
+        shell: pwsh
+        run: |
+          $y = (Get-Date).Year
+          ./automation/scripts/Publish-ZtaResults.ps1 `
+            -TenantId '${{ matrix.customer.tenantId }}' -ClientId '${{ secrets.ZTA_CLIENT_ID }}' `
+            -DriveId '${{ matrix.customer.driveId }}' -Folder "$y" -FilePath @(
+              "$env:RUNNER_TEMP\zt\ZeroTrustAssessmentReport.html",
+              "drift/${{ steps.drift.outputs.slug }}/${{ steps.drift.outputs.date }}.md",
+              "results/${{ steps.drift.outputs.slug }}/${{ steps.drift.outputs.date }}.json")
+
+      - name: Notify Teams (optional per customer)
+        if: matrix.customer.teamsWebhookSecret != ''
+        shell: pwsh
+        env:
+          WEBHOOK: ${{ secrets[matrix.customer.teamsWebhookSecret] }}
+        run: |
+          if (-not $env:WEBHOOK) { exit 0 }
+          $body = @{ text = "Zero Trust Assessment — ${{ matrix.customer.name }}: ${{ steps.drift.outputs.passed }} passed, ${{ steps.drift.outputs.failed }} failed, **${{ steps.drift.outputs.regressions }} regressions**. Report: ${{ matrix.customer.siteUrl }}" } | ConvertTo-Json
+          Invoke-RestMethod -Method POST -Uri $env:WEBHOOK -Body $body -ContentType 'application/json'
+
+      - name: Keep full report as short-lived artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ steps.drift.outputs.slug }}-${{ steps.drift.outputs.date }}
+          path: ${{ runner.temp }}/zt/ZeroTrustAssessmentReport.html
+          retention-days: 14

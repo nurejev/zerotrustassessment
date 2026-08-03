@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZTA · Zero Trust Assessment · Limon-IT</title>
+<style>
+/* ===== ENCA design language ===== */
+:root{
+  --ink:#12331f; --green:#1e4729; --green-deep:#12331f; --accent2:#3f7a24;
+  --lemon:#f7d65a; --lemon-deep:#dfb32b; --muted:#5f7a67; --border:#dbe7de;
+  --surface:#ffffff; --bg:#f2f7f3; --soft:#eaf3ec; --radius:16px;
+  --shadow:0 10px 30px rgba(18,51,31,.10);
+  --on:#3f7a24; --off:#b04a3a; --report:#b8860b;
+  --hover:#fafdf9; --line:#f0f5f1; --soft2:#f6faf7; --glow:#cdeed4;
+  --ok-bg:#e5f3d9; --ok-bd:#c3e0ad;
+  --warn-bg:#fdf3c9; --warn-bd:#eeda8e; --warn-fg:#8a6d0b;
+  --bad-bg:#f7e3df; --bad-bd:#eec4bc;
+  --high-bg:#fbe6d4; --high-fg:#a04d0b;
+  --blue:#1f4e8f; --blue-bg:#dde9f7; --na:#cdd8d0;
+  color-scheme:light;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+button{font-family:inherit;cursor:pointer}
+a{color:var(--accent2)}
+.muted{color:var(--muted)} .mini{font-size:12px;color:var(--muted)}
+header{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.hwrap{max-width:1180px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:10px}
+.logo b{font-size:17px;letter-spacing:-.02em}
+.logo b span{color:var(--accent2)}
+.logo-mark{width:34px;height:34px;border-radius:9px;background:var(--green);color:var(--lemon);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+.app-tag{background:var(--soft);color:var(--green);font-weight:600;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--border)}
+.spacer{flex:1}
+.tenant{display:none;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.tenant.show{display:flex}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px}
+.btn{border:1px solid var(--border);background:var(--surface);color:var(--ink);padding:8px 16px;border-radius:10px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+.btn:hover{border-color:var(--accent2)}
+.btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn.lemon{background:var(--lemon);border-color:var(--lemon-deep);color:var(--green-deep)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+main{max-width:1180px;margin:0 auto;padding:28px 24px 80px}
+.screen{display:none}.screen.active{display:block}
+#screen-login.active,#screen-run.active{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 180px)}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:48px;max-width:500px;text-align:center;
+  background-image:radial-gradient(500px 260px at 85% -80px,var(--glow) 0%,transparent 60%)}
+.login-card h1{font-size:24px;margin:18px 0 8px;letter-spacing:-.02em}
+.login-card p{color:var(--muted);line-height:1.55;margin-bottom:26px}
+.ms-btn{width:100%;justify-content:center;padding:12px;font-size:14px}
+.login-note{margin-top:20px;font-size:12px;color:var(--muted);line-height:1.5}
+.login-note code{background:var(--soft);padding:1px 6px;border-radius:6px;font-size:11px}
+.run-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:36px 40px;max-width:640px;width:100%}
+.run-card h1{font-size:21px;margin-bottom:6px;letter-spacing:-.02em}
+.pillar-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:20px 0}
+.pillar-opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--border);border-radius:12px;padding:12px 14px;cursor:pointer;background:var(--surface);transition:.12s}
+.pillar-opt:hover{background:var(--hover)}
+.pillar-opt.sel{background:var(--soft);border-color:var(--accent2)}
+.pillar-opt input{margin-top:3px;accent-color:var(--green)}
+.pillar-opt b{font-size:13.5px}
+.pillar-opt .mini{display:block;margin-top:2px}
+.scopebox{background:var(--soft2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:18px}
+.pbar{height:10px;background:var(--soft);border-radius:999px;overflow:hidden}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--green));border-radius:999px;transition:width .3s}
+.plog{margin-top:14px;background:var(--green-deep);color:#cfe3d4;border-radius:12px;padding:14px 16px;font:11.5px/1.7 ui-monospace,Menlo,Consolas,monospace;height:170px;overflow:auto;text-align:left}
+.plog .ok{color:#9fd48a}.plog .dim{color:#7d9c88}.plog .err{color:#e8a196}
+.rephead{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:18px}
+.rephead h1{font-size:23px;letter-spacing:-.02em}
+.rephead .mini{padding-bottom:3px}
+.seg{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:8px 16px;font-weight:600;font-size:13px;color:var(--muted)}
+.seg button.active{background:var(--green);color:#fff}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:10px;position:sticky;top:58px;z-index:40;background:var(--bg);padding:12px 0;margin:0 0 6px;box-shadow:0 6px 12px -8px rgba(18,51,31,.15)}
+.tb-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+.search{flex:1;min-width:200px;position:relative}
+.search input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:10px;font:inherit;background:var(--surface)}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);opacity:.45}
+.fchip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer}
+.fchip.active{background:var(--soft);color:var(--green);border-color:var(--accent2)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px}
+.scard .num{font-size:28px;font-weight:700;letter-spacing:-.03em}
+.scard .lbl{font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
+.scard.f .num{color:var(--off)} .scard.p .num{color:var(--on)} .scard.i .num{color:var(--report)}
+.ovgrid{display:grid;grid-template-columns:340px 1fr;gap:14px;margin-bottom:22px}
+@media(max-width:840px){.ovgrid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px}
+.panel h3{font-size:14px;margin-bottom:14px}
+.tinfo{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+.tinfo .k{color:var(--muted)}
+.pillarbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.pillarbar .nm{width:74px;font-weight:600;font-size:13px}
+.pillarbar .track{flex:1;height:10px;background:var(--soft);border-radius:999px;overflow:hidden;display:flex}
+.pillarbar .seg-p{background:var(--accent2)}.pillarbar .seg-f{background:var(--off)}.pillarbar .seg-i{background:var(--lemon-deep)}.pillarbar .seg-s{background:var(--na)}
+.pillarbar .pct{width:98px;text-align:right;font-size:12px;color:var(--muted)}
+.list-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+table.plist{width:100%;border-collapse:collapse}
+table.plist th{background:var(--soft);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--border)}
+table.plist td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+table.plist tr:last-child td{border-bottom:0}
+table.plist tbody tr{cursor:pointer}
+table.plist tbody tr:hover td{background:var(--hover)}
+.tname{font-weight:600}
+.tid{font-size:11px;color:var(--muted);font-weight:500}
+.state{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+.state.pass{background:var(--ok-bg);color:var(--on);border-color:var(--ok-bd)}
+.state.fail{background:var(--bad-bg);color:var(--off);border-color:var(--bad-bd)}
+.state.inv{background:var(--warn-bg);color:var(--warn-fg);border-color:var(--warn-bd)}
+.state.skip{background:var(--soft2);color:var(--muted);border-color:var(--border)}
+.risk{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.risk.High{background:var(--high-bg);color:var(--high-fg)}
+.risk.Medium{background:var(--warn-bg);color:var(--warn-fg)}
+.risk.Low{background:var(--blue-bg);color:var(--blue)}
+.overlay{position:fixed;inset:0;background:rgba(18,51,31,.35);z-index:100;display:none}
+.overlay.show{display:block}
+.drawer{position:fixed;top:0;right:-720px;width:min(700px,94vw);height:100vh;background:var(--surface);z-index:101;box-shadow:-16px 0 44px rgba(18,51,31,.22);transition:right .25s;display:flex;flex-direction:column}
+.drawer.show{right:0}
+.dhead{padding:22px 26px 16px;border-bottom:1px solid var(--border);position:relative}
+.dhead h2{font-size:18px;line-height:1.35;padding-right:40px}
+.dclose{position:absolute;top:16px;right:16px;border:0;background:none;font-size:20px;color:var(--muted);width:32px;height:32px;border-radius:8px}
+.dclose:hover{background:var(--soft)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.chip{font-size:11px;font-weight:600;background:var(--soft);color:var(--green);border:1px solid var(--border);padding:3px 10px;border-radius:999px}
+.dbody{padding:20px 26px;overflow-y:auto;flex:1;line-height:1.6;font-size:13.5px}
+.dbody h4{font-size:13px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.dbody h4:first-child{margin-top:0}
+.dbody ul{margin:0 0 8px 18px}
+.evi{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+.evi th{background:var(--soft);text-align:left;padding:7px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.evi td{padding:7px 10px;border-bottom:1px solid var(--line)}
+/* modal (SharePoint / drift) */
+.modal{position:fixed;inset:0;z-index:110;display:none;align-items:center;justify-content:center;background:rgba(18,51,31,.35)}
+.modal.show{display:flex}
+.mcard{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px 28px;max-width:560px;width:94vw;max-height:86vh;overflow:auto}
+.mcard h2{font-size:17px;margin-bottom:12px}
+.mcard input[type=text]{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:10px;font:inherit;margin:6px 0 12px}
+.mrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.hist-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;cursor:pointer}
+.hist-item:hover{background:var(--hover);border-color:var(--accent2)}
+.driftgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
+.dcell{border:1px solid var(--border);border-radius:12px;padding:10px 12px;text-align:center}
+.dcell b{font-size:20px;display:block}
+footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:var(--muted)}
+.notice{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-fg);border-radius:10px;padding:8px 12px;font-size:12px;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <div class="logo"><div class="logo-mark">L</div><b>Limon-<span>IT</span></b></div>
+    <span class="app-tag">ZTA · Zero Trust Assessment</span>
+    <span class="mini muted">zerotrustassessment.limon-it.nl</span>
+    <div class="spacer"></div>
+    <div class="tenant" id="tenantBox">
+      <div><div style="font-weight:600" id="tenantName"></div><div class="mini" id="tenantUser"></div></div>
+      <div class="avatar" id="avatar"></div>
+      <button class="btn" id="signOutBtn">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ LOGIN ============ -->
+<section id="screen-login" class="screen active">
+  <div class="login-card">
+    <div class="logo-mark" style="width:76px;height:76px;font-size:34px;border-radius:18px;margin:0 auto">L</div>
+    <h1>Zero Trust Assessment</h1>
+    <p>Run Zero Trust security checks against your Microsoft tenant — straight from the browser. Read-only, nothing leaves your session. v1 runs a curated subset of the checks from Microsoft's open-source Zero Trust Assessment.</p>
+    <button class="btn primary ms-btn" id="signInBtn">
+      <svg width="17" height="17" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+      Sign in with Microsoft
+    </button>
+    <div class="login-note">Multi-tenant · delegated read-only Graph permissions · runs entirely in your browser.</div>
+    <div class="login-note"><a href="?demo=1">Run the demo with sample data →</a></div>
+    <div class="login-note">Based on the MIT-licensed <a href="https://github.com/microsoft/zerotrustassessment" target="_blank" rel="noopener">microsoft/zerotrustassessment</a>.</div>
+  </div>
+</section>
+
+<!-- ============ RUN ============ -->
+<section id="screen-run" class="screen">
+  <div class="run-card">
+    <div id="runSetup">
+      <h1>Run the assessment</h1>
+      <p class="mini" style="margin-bottom:4px">v1 subset — Identity baseline + Intune basics. Permissions are delegated and read-only.</p>
+      <div class="pillar-grid">
+        <label class="pillar-opt sel"><input type="checkbox" id="pIdentity" checked><span><b>🪪 Identity</b> <span class="mini">16 checks · CA, auth methods, apps &amp; consent, roles</span></span></label>
+        <label class="pillar-opt"><input type="checkbox" id="pDevices"><span><b>💻 Devices</b> <span class="mini">1 check · Intune compliance coverage (asks for Intune read scope)</span></span></label>
+      </div>
+      <div class="scopebox" id="scopeBox"></div>
+      <button class="btn primary ms-btn" id="startBtn">▶ Start assessment</button>
+    </div>
+    <div id="runProgress" style="display:none">
+      <h1 id="runTitle">Assessing…</h1>
+      <p class="mini" style="margin-bottom:14px">Read-only. Results stream in as checks finish.</p>
+      <div class="pbar"><i id="pbarFill"></i></div>
+      <div class="mini" style="display:flex;justify-content:space-between;margin-top:6px"><span id="pPhase">Fetching…</span><span id="pPct">0%</span></div>
+      <div class="plog" id="plog"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ REPORT ============ -->
+<section id="screen-report" class="screen">
+  <div id="demoNotice" class="notice" style="display:none">Demo mode — sample data ran through the real check engine. Sign in to assess a real tenant.</div>
+  <div class="rephead">
+    <h1 id="repTitle">Zero Trust Assessment</h1>
+    <span class="mini" id="repMeta"></span>
+    <div class="tb-actions">
+      <button class="btn" id="dlHtmlBtn">⬇ HTML report</button>
+      <button class="btn" id="dlJsonBtn">⬇ JSON</button>
+      <button class="btn" id="spBtn">☁ SharePoint…</button>
+      <button class="btn" id="driftBtn">⇄ Drift compare…</button>
+      <button class="btn lemon" id="rerunBtn">↻ Re-run</button>
+    </div>
+  </div>
+
+  <div class="cards" id="sumCards"></div>
+
+  <div class="ovgrid">
+    <div class="panel">
+      <h3>Tenant</h3>
+      <div class="tinfo" id="tenantInfo"></div>
+      <h3 style="margin-top:20px">Top risks to fix first</h3>
+      <div class="mini" id="topRisks" style="line-height:2"></div>
+    </div>
+    <div class="panel">
+      <h3>Result per pillar</h3>
+      <div id="pillarBars"></div>
+      <p class="mini" style="margin-top:8px">v1 covers a curated subset of Microsoft's 328 checks. Full-coverage scheduled runs: see the monthly automation (GitHub Actions + PowerShell module).</p>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" placeholder="Search checks…">
+    </div>
+    <div class="seg" id="pillarSeg"></div>
+    <span class="fchip active" data-st="all">All</span>
+    <span class="fchip" data-st="fail">Failed</span>
+    <span class="fchip" data-st="inv">Investigate</span>
+    <span class="fchip" data-st="pass">Passed</span>
+    <span class="fchip" data-st="skip">Skipped</span>
+  </div>
+
+  <div class="list-card">
+    <table class="plist">
+      <thead><tr><th style="width:50%">Check</th><th>Pillar</th><th>Risk</th><th>Status</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<footer>ZTA v0.1 · Limon-IT · engine inspired by the MIT-licensed <a href="https://github.com/microsoft/zerotrustassessment" target="_blank" rel="noopener">microsoft/zerotrustassessment</a> · sibling of <a href="https://enca.limon-it.nl" target="_blank" rel="noopener">ENCA</a></footer>
+
+<!-- drawer -->
+<div class="overlay" id="ovl"></div>
+<aside class="drawer" id="drawer">
+  <div class="dhead">
+    <button class="dclose" id="dcloseBtn">✕</button>
+    <h2 id="dTitle"></h2>
+    <div class="chips" id="dChips"></div>
+  </div>
+  <div class="dbody" id="dBody"></div>
+</aside>
+
+<!-- SharePoint modal -->
+<div class="modal" id="spModal">
+  <div class="mcard">
+    <h2>☁ SharePoint</h2>
+    <p class="mini">Save this run to a SharePoint site in <b>this tenant</b> (delegated — your own permissions apply), and build a monthly history for drift comparison. Requested scope: <code>Sites.ReadWrite.All</code>, on demand.</p>
+    <label class="mini" style="font-weight:600">Site URL</label>
+    <input type="text" id="spSiteUrl" placeholder="https://contoso.sharepoint.com/sites/security">
+    <div class="mrow">
+      <button class="btn primary" id="spSaveBtn">Save report + results to this site</button>
+      <button class="btn" id="spHistBtn">Load history from this site…</button>
+    </div>
+    <div id="spStatus" class="mini" style="margin-top:12px"></div>
+    <div id="spHistory" style="margin-top:12px"></div>
+    <hr style="border:0;border-top:1px solid var(--border);margin:16px 0">
+    <p class="mini"><b>Monthly automatic runs:</b> unattended full-coverage runs (all 328 checks) + drift reports are done by the GitHub Actions automation with the official PowerShell module — see <code>automation/README.md</code> in the repo. This page's history compare works on the JSONs either path produces.</p>
+    <div class="mrow"><button class="btn" id="spCloseBtn">Close</button></div>
+  </div>
+</div>
+
+<!-- Drift modal -->
+<div class="modal" id="driftModal">
+  <div class="mcard">
+    <h2>⇄ Drift compare</h2>
+    <p class="mini">Compare the current run with a previous results JSON (downloaded earlier, from SharePoint history, or produced by the monthly automation).</p>
+    <div class="mrow">
+      <label class="btn">📂 Load previous JSON<input type="file" id="driftFile" accept=".json" style="display:none"></label>
+      <button class="btn" id="driftSpBtn">☁ Pick from SharePoint history</button>
+    </div>
+    <div id="driftOut" style="margin-top:14px"></div>
+    <div class="mrow"><button class="btn" id="driftCloseBtn">Close</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================= CONFIG =================
+   Fill clientId after running New-ZtaAppRegistration.ps1.
+   Serve over http://localhost:8080 or the production host (MSAL SPA redirect). */
+const CONFIG = {
+  clientId: 'a97c1c04-224b-4ade-b70f-368e72066e6e',                                   // ← Entra app registration (SPA)
+  authority: 'https://login.microsoftonline.com/organizations',
+  baseScopes: ['User.Read','Policy.Read.All','Directory.Read.All'],
+  intuneScope: 'DeviceManagementConfiguration.Read.All',
+  spScope: 'Sites.ReadWrite.All',
+  version: '0.1'
+};
+
+/* ================= CHECKS (pure, testable) ================= */
+/*ZTA-CHECKS-START*/
+const H = {
+  enabled: p => p.state === 'enabled',
+  targetsAllUsers: p => (p.conditions?.users?.includeUsers || []).includes('All'),
+  hasBlock: p => (p.grantControls?.builtInControls || []).includes('block'),
+  hasMfa: p => (p.grantControls?.builtInControls || []).includes('mfa') || !!p.grantControls?.authenticationStrength,
+  targetsRoles: p => (p.conditions?.users?.includeRoles || []).length > 0,
+  legacyClients: p => { const c = p.conditions?.clientAppTypes || []; return c.includes('exchangeActiveSync') && c.includes('other'); },
+  days: ms => Math.round(ms / 86400000)
+};
+const PHISH_RESISTANT_ID = '00000000-0000-0000-0000-000000000004';
+const GUEST_RESTRICTED_ID = '2af84b1e-32c8-42b7-82bc-daa82404023b';
+
+const CHECKS = [
+{ id:'ZTA-001', title:'Tenant is protected by Conditional Access or security defaults', pillar:'Identity', risk:'High',
+  why:'Without either, sign-ins are not challenged at all.',
+  rem:['Enable Conditional Access baseline policies (or security defaults on small tenants).'],
+  run(D){ const ca=(D.ca||[]).filter(H.enabled);
+    if(ca.length) return {status:'pass', detail:`${ca.length} enabled Conditional Access policies.`};
+    if(D.secDefaults?.isEnabled) return {status:'pass', detail:'Security defaults are enabled (no CA policies).'};
+    return {status:'fail', detail:'No enabled CA policies and security defaults are off.'}; } },
+
+{ id:'ZTA-002', title:'Legacy authentication is blocked', pillar:'Identity', risk:'High',
+  why:'Legacy protocols (POP/IMAP/SMTP basic, EAS) bypass MFA entirely.',
+  rem:['Create a CA policy blocking clientAppTypes exchangeActiveSync + other for all users.','Check sign-in logs for remaining legacy auth before enforcing.'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.hasBlock(p)&&H.legacyClients(p));
+    if(!pol.length) return {status:'fail', detail:'No enabled CA policy blocks legacy authentication clients.'};
+    const gaps=pol.filter(p=>!H.targetsAllUsers(p));
+    return gaps.length===pol.length
+      ? {status:'inv', detail:'Legacy auth is blocked, but not for All users.', evidence:pol.map(p=>[p.displayName,'scope: not All users',''])}
+      : {status:'pass', detail:`Blocked for all users by: ${pol.filter(H.targetsAllUsers).map(p=>p.displayName).join(', ')}`}; } },
+
+{ id:'ZTA-003', title:'MFA is required for all users', pillar:'Identity', risk:'High',
+  why:'MFA stops the vast majority of credential-based attacks.',
+  rem:['Create a CA policy: All users → all cloud apps → require MFA (or an authentication strength).'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsAllUsers(p)&&H.hasMfa(p));
+    return pol.length ? {status:'pass', detail:`Enforced by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'fail', detail:'No enabled CA policy requires MFA for All users.'}; } },
+
+{ id:'ZTA-004', title:'MFA is required for administrative roles', pillar:'Identity', risk:'High',
+  why:'Admin accounts are the highest-value target.',
+  rem:['Create a CA policy targeting directory roles with MFA or an authentication strength.'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsRoles(p)&&H.hasMfa(p));
+    const all=(D.ca||[]).some(p=>H.enabled(p)&&H.targetsAllUsers(p)&&H.hasMfa(p));
+    if(pol.length) return {status:'pass', detail:`Role-targeted MFA policy: ${pol.map(p=>p.displayName).join(', ')}`};
+    return all ? {status:'inv', detail:'Covered only via the all-users MFA policy — a dedicated admin policy (stronger controls, no exclusions) is recommended.'}
+               : {status:'fail', detail:'No CA policy requires MFA for administrative roles.'}; } },
+
+{ id:'ZTA-005', title:'Privileged roles require phishing-resistant authentication', pillar:'Identity', risk:'High',
+  why:'OTP/push MFA is phishable; FIDO2/passkeys are not.',
+  rem:['Create a CA policy: directory roles → authentication strength "Phishing-resistant MFA".','Register passkeys for all admins first; roll out report-only.'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsRoles(p)&&p.grantControls?.authenticationStrength?.id===PHISH_RESISTANT_ID);
+    return pol.length ? {status:'pass', detail:`Enforced by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'fail', detail:'No policy enforces phishing-resistant authentication strength for privileged roles.'}; } },
+
+{ id:'ZTA-006', title:'Risk-based Conditional Access policies exist', pillar:'Identity', risk:'Medium', license:'Entra ID P2',
+  why:'Identity Protection risk signals should trigger step-up or block.',
+  rem:['Add policies for high sign-in risk (require MFA / block) and high user risk (require password change).'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&((p.conditions?.signInRiskLevels||[]).length||(p.conditions?.userRiskLevels||[]).length));
+    if(pol.length) return {status:'pass', detail:`Risk-based policies: ${pol.map(p=>p.displayName).join(', ')}`};
+    return D.hasP2===false ? {status:'skip', detail:'No Entra ID P2 detected — risk-based CA is not licensed.'}
+      : {status:'fail', detail:'No enabled CA policy uses sign-in or user risk conditions.'}; } },
+
+{ id:'ZTA-007', title:'Strict all-user policies have emergency-access exclusions', pillar:'Identity', risk:'Medium',
+  why:'A block/MFA policy for All users without any exclusion can lock the whole tenant out.',
+  rem:['Exclude the break-glass accounts (cloud-only, passkey-protected, monitored) from every strict policy.'],
+  run(D){ const strict=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsAllUsers(p)&&(H.hasBlock(p)||H.hasMfa(p)));
+    if(!strict.length) return {status:'skip', detail:'No strict all-user policies to evaluate.'};
+    const bad=strict.filter(p=>!((p.conditions?.users?.excludeUsers||[]).length||(p.conditions?.users?.excludeGroups||[]).length));
+    return bad.length ? {status:'inv', detail:`${bad.length} strict polic${bad.length>1?'ies have':'y has'} no exclusions at all.`, evidence:bad.map(p=>[p.displayName,'no excluded users/groups','verify break-glass coverage'])}
+      : {status:'pass', detail:'Every strict all-user policy has at least one exclusion (verify these are the break-glass accounts).'}; } },
+
+{ id:'ZTA-008', title:'User consent to applications is restricted', pillar:'Identity', risk:'High',
+  why:'Unrestricted user consent enables illicit-consent-grant phishing.',
+  rem:['Allow user consent only for verified publishers / low-risk permissions, or disable and use the admin consent workflow.'],
+  run(D){ const g=D.authz?.defaultUserRolePermissions?.permissionGrantPoliciesAssigned||[];
+    if(g.some(x=>x.includes('microsoft-user-default-legacy'))) return {status:'fail', detail:'Users may consent to any app for any permission (legacy default).'};
+    return {status:'pass', detail: g.length? `Consent limited by policy: ${g.join(', ')}` : 'User consent is disabled.'}; } },
+
+{ id:'ZTA-009', title:'Users cannot register applications', pillar:'Identity', risk:'Medium',
+  why:'User-created app registrations are a common persistence and phishing vehicle.',
+  rem:['Set "Users can register applications" to No; use the admin consent workflow for legitimate needs.'],
+  run(D){ return D.authz?.defaultUserRolePermissions?.allowedToCreateApps
+    ? {status:'fail', detail:'Any user can register applications.'}
+    : {status:'pass', detail:'Application registration is limited to admins.'}; } },
+
+{ id:'ZTA-010', title:'Guest invitations are restricted', pillar:'Identity', risk:'Medium',
+  why:'Everyone-can-invite means uncontrolled external access growth.',
+  rem:["Set guest invite settings to 'adminsAndGuestInviters' or stricter."],
+  run(D){ const v=D.authz?.allowInvitesFrom;
+    return ['admins','adminsAndGuestInviters','none'].includes(v)
+      ? {status:'pass', detail:`allowInvitesFrom = ${v}`}
+      : {status:'fail', detail:`allowInvitesFrom = ${v||'everyone'} — any user (or even guests) can invite.`}; } },
+
+{ id:'ZTA-011', title:'Guest user access is restricted', pillar:'Identity', risk:'Medium',
+  why:'Default guest permissions expose directory enumeration.',
+  rem:["Set guest user access to 'restricted' (guests can only see their own objects)."],
+  run(D){ return D.authz?.guestUserRoleId===GUEST_RESTRICTED_ID
+    ? {status:'pass', detail:'Guest access level: restricted.'}
+    : {status:'inv', detail:'Guests have default (limited) directory access — consider the restricted level.'}; } },
+
+{ id:'ZTA-012', title:'Between 2 and 8 Global Administrators', pillar:'Identity', risk:'High',
+  why:'One GA is an availability risk; many GAs are an attack surface.',
+  rem:['Use PIM for eligible (not permanent) assignments; delegate with lesser roles.'],
+  run(D){ const n=(D.gaMembers||[]).length;
+    if(n===0) return {status:'inv', detail:'Could not read Global Administrator members.'};
+    if(n<2)  return {status:'fail', detail:`Only ${n} Global Administrator — availability risk.`};
+    if(n>8)  return {status:'fail', detail:`${n} Global Administrators — too many.`, evidence:(D.gaMembers||[]).map(m=>[m.displayName||m.userPrincipalName||m.id,'Global Administrator',''])};
+    return {status:'pass', detail:`${n} Global Administrators.`}; } },
+
+{ id:'ZTA-013', title:'Application credentials are short-lived', pillar:'Identity', risk:'Medium',
+  why:'Long-lived client secrets are durable stolen credentials.',
+  rem:['Replace secrets valid >2 years; prefer certificates or managed identities; rotate on a schedule.'],
+  run(D){ const bad=[];
+    for(const a of (D.apps||[])) for(const c of (a.passwordCredentials||[])){
+      const life=H.days(new Date(c.endDateTime)-new Date(c.startDateTime));
+      if(life>730) bad.push([a.displayName, `secret lifetime ${life} d`, `expires ${String(c.endDateTime).slice(0,10)}`]); }
+    return bad.length ? {status:'fail', detail:`${bad.length} app secret(s) with a lifetime over 2 years.`, evidence:bad}
+      : {status:'pass', detail:'No application secrets with a lifetime over 2 years.'}; } },
+
+{ id:'ZTA-014', title:'Phishing-resistant methods are enabled in the tenant', pillar:'Identity', risk:'Medium',
+  why:'FIDO2/passkeys must be enabled before they can be required.',
+  rem:['Enable FIDO2 security keys / passkeys in the authentication methods policy.'],
+  run(D){ const cfg=D.authMethods?.authenticationMethodConfigurations||[];
+    const on=cfg.filter(c=>['Fido2','X509Certificate'].includes(c.id)&&c.state==='enabled').map(c=>c.id);
+    return on.length ? {status:'pass', detail:`Enabled: ${on.join(', ')}`}
+      : {status:'fail', detail:'Neither FIDO2/passkeys nor certificate-based auth is enabled.'}; } },
+
+{ id:'ZTA-015', title:'Named locations are defined and used', pillar:'Identity', risk:'Low',
+  why:'Location context strengthens CA decisions (and enables travel-impossible detections).',
+  rem:['Define trusted named locations and reference them in CA policies.'],
+  run(D){ const n=(D.namedLocations||[]).length;
+    if(!n) return {status:'fail', detail:'No named locations defined.'};
+    const used=(D.ca||[]).some(p=>{const l=p.conditions?.locations; return l&&((l.includeLocations||[]).length||(l.excludeLocations||[]).length);});
+    return used ? {status:'pass', detail:`${n} named locations, referenced by CA policies.`}
+      : {status:'inv', detail:`${n} named locations exist but no CA policy references them.`}; } },
+
+{ id:'ZTA-016', title:'Password expiration is disabled', pillar:'Identity', risk:'Low',
+  why:'Forced rotation produces weaker, patterned passwords (NIST/Microsoft guidance).',
+  rem:['Set password validity to never expire; invest in MFA + banned-password protection instead.'],
+  run(D){ const doms=(D.domains||[]).filter(d=>d.isVerified!==false);
+    const rot=doms.filter(d=>d.passwordValidityPeriodInDays && d.passwordValidityPeriodInDays<2147483647);
+    return rot.length ? {status:'inv', detail:`${rot.length} domain(s) still expire passwords.`, evidence:rot.map(d=>[d.id,`validity ${d.passwordValidityPeriodInDays} d`,''])}
+      : {status:'pass', detail:'Passwords are set to never expire.'}; } },
+
+{ id:'ZTA-101', title:'Intune compliance policies cover the platforms in use', pillar:'Devices', risk:'High', dataset:'compliance',
+  why:'Device compliance is the anchor for device-based Conditional Access.',
+  rem:['Create compliance policies for every managed platform and assign them.'],
+  run(D){ if(D.compliance===undefined) return {status:'skip', detail:'Devices pillar not selected (or Intune scope declined).'};
+    const n=(D.compliance||[]).length;
+    return n ? {status:'pass', detail:`${n} compliance polic${n>1?'ies':'y'} found.`, evidence:(D.compliance||[]).map(p=>[p.displayName||p.id,(p['@odata.type']||'').replace('#microsoft.graph.',''),''])}
+      : {status:'fail', detail:'No device compliance policies exist.'}; } }
+];
+
+function evaluateAll(D, log){
+  const out=[];
+  for(const c of CHECKS){
+    let r; try { r=c.run(D); } catch(e){ r={status:'inv', detail:'Check errored: '+(e.message||e)}; }
+    out.push({id:c.id, title:c.title, pillar:c.pillar, risk:c.risk, license:c.license||null,
+              why:c.why, rem:c.rem, status:r.status, detail:r.detail, evidence:r.evidence||[]});
+    if(log) log(`${r.status==='pass'?'✓':r.status==='fail'?'✗':'•'} ${c.id} ${c.title} — ${r.status}`, r.status==='fail'?'err':'ok');
+  }
+  return out;
+}
+function compareRuns(prev, cur){
+  const pm={}; (prev.checks||prev.tests||[]).forEach(t=>pm[t.id]=t);
+  const cm={}; (cur.checks||[]).forEach(t=>cm[t.id]=t);
+  const regressed=[],fixed=[],added=[],removed=[];
+  for(const t of cur.checks){ const p=pm[t.id];
+    if(!p){added.push(t);continue;}
+    if(p.status!==t.status){ if(t.status==='fail')regressed.push(t); else if(p.status==='fail'&&t.status==='pass')fixed.push(t); } }
+  for(const t of (prev.checks||prev.tests||[])) if(!cm[t.id]) removed.push(t);
+  return {regressed,fixed,added,removed};
+}
+/*ZTA-CHECKS-END*/
+
+/* ================= DEMO DATA ================= */
+/*ZTA-DEMO-START*/
+const DEMO = {
+  tenantName:'Contoso B.V. (demo)', tenantId:'00000000-demo', account:'demo@contoso.nl', hasP2:true,
+  secDefaults:{isEnabled:false},
+  ca:[
+    {displayName:'CA001 Require MFA for all users', state:'enabled',
+     conditions:{users:{includeUsers:['All'],excludeUsers:['bg1'],excludeGroups:[]},clientAppTypes:['all']},
+     grantControls:{builtInControls:['mfa']}},
+    {displayName:'CA004 Block legacy authentication', state:'enabled',
+     conditions:{users:{includeUsers:['All'],excludeUsers:[],excludeGroups:[]},clientAppTypes:['exchangeActiveSync','other']},
+     grantControls:{builtInControls:['block']}},
+    {displayName:'CA100 Admin MFA', state:'enabled',
+     conditions:{users:{includeUsers:[],includeRoles:['62e90394-69f5-4237-9190-012177145e10'],excludeUsers:['bg1']},clientAppTypes:['all']},
+     grantControls:{builtInControls:['mfa']}},
+    {displayName:'CA900 Risky sign-ins (report-only)', state:'enabledForReportingButNotEnforced',
+     conditions:{users:{includeUsers:['All']},signInRiskLevels:['high','medium']},
+     grantControls:{builtInControls:['mfa']}}
+  ],
+  authz:{allowInvitesFrom:'everyone', guestUserRoleId:'10dae51f-b6af-4016-8d66-8c2a99b929b3',
+    defaultUserRolePermissions:{allowedToCreateApps:true, permissionGrantPoliciesAssigned:['ManagePermissionGrantsForSelf.microsoft-user-default-low']}},
+  authMethods:{authenticationMethodConfigurations:[
+    {id:'Fido2',state:'disabled'},{id:'MicrosoftAuthenticator',state:'enabled'},{id:'Sms',state:'enabled'},{id:'X509Certificate',state:'disabled'}]},
+  namedLocations:[{displayName:'HQ Amsterdam'},{displayName:'Branch Rotterdam'}],
+  gaMembers:[{displayName:'Admin One',userPrincipalName:'admin1@contoso.nl'},{displayName:'Admin Two',userPrincipalName:'admin2@contoso.nl'},
+    {displayName:'Admin Three'},{displayName:'Admin Four'},{displayName:'Admin Five'},{displayName:'Admin Six'},
+    {displayName:'Admin Seven'},{displayName:'Admin Eight'},{displayName:'Admin Nine'},{displayName:'Admin Ten'}],
+  apps:[
+    {displayName:'HR-Sync-Legacy', passwordCredentials:[{startDateTime:'2023-01-01T00:00:00Z',endDateTime:'2033-01-01T00:00:00Z'}]},
+    {displayName:'Modern-App', passwordCredentials:[{startDateTime:'2026-01-01T00:00:00Z',endDateTime:'2026-12-31T00:00:00Z'}]}],
+  domains:[{id:'contoso.nl',isVerified:true,passwordValidityPeriodInDays:90},{id:'contoso.onmicrosoft.com',isVerified:true,passwordValidityPeriodInDays:2147483647}],
+  compliance:[{displayName:'Win10/11 baseline','@odata.type':'#microsoft.graph.windows10CompliancePolicy'},
+              {displayName:'iOS baseline','@odata.type':'#microsoft.graph.iosCompliancePolicy'}]
+};
+/*ZTA-DEMO-END*/
+
+/* ================= AUTH + GRAPH ================= */
+let msalApp=null, account=null, DEMO_MODE=new URLSearchParams(location.search).has('demo');
+let RESULTS=null;   // current run result object
+
+async function loadMsal(){
+  if(window.msal) return;
+  await new Promise((res,rej)=>{const s=document.createElement('script');
+    s.src='https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
+    s.onload=res; s.onerror=()=>rej(new Error('Could not load MSAL')); document.head.appendChild(s);});
+}
+async function ensureMsal(){
+  if(!CONFIG.clientId){ alert('No clientId configured yet.\n\nRun New-ZtaAppRegistration.ps1 and paste the application id into CONFIG.clientId in index.html.\n\nOr try the demo: add ?demo=1'); throw new Error('no clientId'); }
+  await loadMsal();
+  if(!msalApp){ msalApp=new msal.PublicClientApplication({
+      auth:{clientId:CONFIG.clientId, authority:CONFIG.authority, redirectUri:location.origin+location.pathname},
+      cache:{cacheLocation:'sessionStorage'}});
+    await msalApp.initialize(); }
+}
+async function getToken(scopes){
+  const req={scopes, account};
+  try{ return (await msalApp.acquireTokenSilent(req)).accessToken; }
+  catch(e){ const r=await msalApp.acquireTokenPopup(req); account=r.account; return r.accessToken; }
+}
+async function graphGET(path, scopes, opt={}){
+  const token=await getToken(scopes||CONFIG.baseScopes);
+  let url=path.startsWith('http')?path:'https://graph.microsoft.com/v1.0'+path;
+  const items=[]; let single=null;
+  while(url){
+    const r=await fetch(url,{headers:{Authorization:'Bearer '+token, ...(opt.headers||{})}});
+    if(r.status===429||r.status===503){ await new Promise(x=>setTimeout(x, 1000*(parseInt(r.headers.get('Retry-After'))||3))); continue; }
+    if(!r.ok){ const t=await r.text(); const err=new Error(`${r.status} ${path}: ${t.slice(0,200)}`); err.status=r.status; throw err; }
+    if(opt.raw) return r;
+    const j=await r.json();
+    if(Array.isArray(j.value)){ items.push(...j.value); url=j['@odata.nextLink']||null; }
+    else { single=j; url=null; }
+  }
+  return single??items;
+}
+
+/* ================= RUN ================= */
+const $=id=>document.getElementById(id);
+function show(s){ document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active')); $('screen-'+s).classList.add('active');
+  $('tenantBox').classList.toggle('show', s!=='login'); window.scrollTo(0,0); }
+function log(msg, cls){ const d=document.createElement('div'); d.className=cls||'dim'; d.textContent=msg; $('plog').appendChild(d); $('plog').scrollTop=1e6; }
+function prog(p,phase){ $('pbarFill').style.width=p+'%'; $('pPct').textContent=p+'%'; if(phase)$('pPhase').textContent=phase; }
+
+async function runAssessment(){
+  $('runSetup').style.display='none'; $('runProgress').style.display=''; $('plog').innerHTML='';
+  const D={};
+  try{
+    if(DEMO_MODE){
+      Object.assign(D, DEMO);
+      const steps=['users & organization','conditionalAccessPolicies (4)','authorizationPolicy','authenticationMethodsPolicy','namedLocations (2)','directoryRoles: Global Administrator (10)','applications (2)','domains (2)','deviceCompliancePolicies (2)'];
+      for(let i=0;i<steps.length;i++){ log('✓ dataset '+steps[i],'ok'); prog(Math.round((i+1)/steps.length*60),'Fetching datasets…'); await new Promise(x=>setTimeout(x,240)); }
+      if(!$('pDevices').checked) delete D.compliance;
+    } else {
+      const sets=[
+        ['org', ()=>graphGET('/organization')],
+        ['ca', ()=>graphGET('/identity/conditionalAccess/policies')],
+        ['authz', ()=>graphGET('/policies/authorizationPolicy')],
+        ['authMethods', ()=>graphGET('/policies/authenticationMethodsPolicy')],
+        ['namedLocations', ()=>graphGET('/identity/conditionalAccess/namedLocations')],
+        ['secDefaults', ()=>graphGET('/policies/identitySecurityDefaultsEnforcementPolicy')],
+        ['gaMembers', ()=>graphGET("/directoryRoles(roleTemplateId='62e90394-69f5-4237-9190-012177145e10')/members?$select=id,displayName,userPrincipalName").catch(e=>e.status===404?[]:Promise.reject(e))],
+        ['apps', ()=>graphGET('/applications?$select=id,displayName,passwordCredentials&$top=999')],
+        ['domains', ()=>graphGET('/domains')]
+      ];
+      if($('pDevices').checked) sets.push(['compliance', ()=>graphGET('/deviceManagement/deviceCompliancePolicies',[...CONFIG.baseScopes,CONFIG.intuneScope])]);
+      for(let i=0;i<sets.length;i++){
+        const [k,fn]=sets[i]; prog(Math.round(i/sets.length*60),'Fetching '+k+'…');
+        try{ D[k]=await fn(); log(`✓ dataset ${k}${Array.isArray(D[k])?' ('+D[k].length+')':''}`,'ok'); }
+        catch(e){ log(`✗ dataset ${k}: ${e.message}`,'err'); D[k]=undefined; }
+      }
+      const org=Array.isArray(D.org)?D.org[0]:D.org;
+      D.tenantName=org?.displayName||'—'; D.tenantId=org?.id||'—';
+      D.hasP2=!!org?.assignedPlans?.some(p=>p.servicePlanId==='eec0eb4f-6444-4f95-aba0-50c24d67f998'&&p.capabilityStatus==='Enabled');
+      D.account=account?.username||'';
+    }
+    prog(65,'Evaluating checks…'); log('→ evaluating '+CHECKS.length+' checks');
+    const checks=evaluateAll(D, log);
+    prog(95,'Rendering report…');
+    RESULTS={app:'zta-web', version:CONFIG.version, executedAt:new Date().toISOString(),
+      tenantId:D.tenantId, tenantName:D.tenantName, account:D.account||'', demo:DEMO_MODE, checks};
+    setTimeout(()=>{ prog(100); renderReport(); show('report'); }, 400);
+  } catch(e){ log('✗ '+(e.message||e),'err'); prog(0,'Failed — see log'); }
+}
+
+/* ================= REPORT ================= */
+const SL={pass:['pass','Passed'],fail:['fail','Failed'],inv:['inv','Investigate'],skip:['skip','Skipped']};
+let curPillar='All', curSt='all';
+
+function renderReport(){
+  const R=RESULTS, cs=R.checks;
+  $('demoNotice').style.display=R.demo?'':'none';
+  $('repTitle').textContent='Zero Trust Assessment — '+R.tenantName;
+  $('repMeta').textContent=`run ${R.executedAt.replace('T',' ').slice(0,16)} UTC · ${cs.length} checks (v1 subset) · zta-web ${R.version}`;
+  const n=s=>cs.filter(c=>c.status===s).length;
+  const testable=cs.length-n('skip'), score=testable?Math.round(n('pass')/testable*100):0;
+  $('sumCards').innerHTML=
+    `<div class="scard p"><div class="num">${n('pass')}</div><div class="lbl">Passed</div></div>
+     <div class="scard f"><div class="num">${n('fail')}</div><div class="lbl">Failed</div></div>
+     <div class="scard i"><div class="num">${n('inv')}</div><div class="lbl">Investigate</div></div>
+     <div class="scard"><div class="num" style="color:var(--muted)">${n('skip')}</div><div class="lbl">Skipped</div></div>
+     <div class="scard"><div class="num">${score}<span style="font-size:16px;color:var(--muted)">%</span></div><div class="lbl">Score (passed / testable)</div></div>`;
+  $('tenantInfo').innerHTML=
+    `<span class="k">Tenant</span><span>${esc(R.tenantName)}</span>
+     <span class="k">Tenant ID</span><span style="font-family:ui-monospace,monospace;font-size:12px">${esc(R.tenantId)}</span>
+     <span class="k">Ran as</span><span>${esc(R.account||'—')}</span>
+     <span class="k">Engine</span><span>zta-web ${R.version} — subset of microsoft/zerotrustassessment</span>`;
+  $('topRisks').innerHTML=cs.filter(c=>c.status==='fail'&&c.risk==='High').slice(0,4)
+    .map(c=>`<span class="risk High">High</span> ${esc(c.title)}<br>`).join('')||'<span class="mini">No failed high-risk checks 🎉</span>';
+  const pillars=[...new Set(cs.map(c=>c.pillar))];
+  $('pillarBars').innerHTML=pillars.map(pl=>{
+    const g=cs.filter(c=>c.pillar===pl), tot=g.length,
+      p=g.filter(c=>c.status==='pass').length, f=g.filter(c=>c.status==='fail').length,
+      i=g.filter(c=>c.status==='inv').length, s=g.filter(c=>c.status==='skip').length,
+      pc=(tot-s)?Math.round(p/(tot-s)*100):0;
+    return `<div class="pillarbar"><span class="nm">${pl}</span><div class="track">
+      <span class="seg-p" style="width:${p/tot*100}%"></span><span class="seg-f" style="width:${f/tot*100}%"></span>
+      <span class="seg-i" style="width:${i/tot*100}%"></span><span class="seg-s" style="width:${s/tot*100}%"></span>
+      </div><span class="pct">${pc}% · ${tot} checks</span></div>`;}).join('');
+  const seg=$('pillarSeg'); seg.innerHTML='';
+  ['All',...pillars].forEach(pl=>{const b=document.createElement('button'); b.textContent=pl;
+    if(pl===curPillar||((curPillar==='All')&&pl==='All')) b.className='active';
+    b.onclick=()=>{curPillar=pl;seg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRows();};
+    seg.appendChild(b);});
+  renderRows();
+}
+function renderRows(){
+  const q=($('q').value||'').toLowerCase(), tb=$('rows'); tb.innerHTML='';
+  RESULTS.checks.filter(c=>(curPillar==='All'||c.pillar===curPillar)&&(curSt==='all'||c.status===curSt)
+      &&(!q||c.title.toLowerCase().includes(q)||c.id.toLowerCase().includes(q)))
+    .forEach(c=>{const tr=document.createElement('tr');
+      tr.innerHTML=`<td><div class="tname">${esc(c.title)}</div><div class="tid">${c.id}</div></td>
+        <td>${c.pillar}</td><td><span class="risk ${c.risk}">${c.risk}</span></td>
+        <td><span class="state ${SL[c.status][0]}">${SL[c.status][1]}</span></td>`;
+      tr.onclick=()=>openDrawer(c); tb.appendChild(tr);});
+}
+function openDrawer(c){
+  $('dTitle').textContent=c.title;
+  $('dChips').innerHTML=`<span class="state ${SL[c.status][0]}">${SL[c.status][1]}</span>
+    <span class="risk ${c.risk}">Risk: ${c.risk}</span><span class="chip">Pillar: ${c.pillar}</span>
+    <span class="chip">${c.id}</span>${c.license?`<span class="chip">License: ${c.license}</span>`:''}`;
+  let h=`<h4>Result</h4><p>${esc(c.detail||'')}</p><h4>Why it matters</h4><p>${esc(c.why||'')}</p>`;
+  if(c.evidence?.length){ h+=`<h4>Evidence</h4><table class="evi"><tr><th>Item</th><th>Detail</th><th>Note</th></tr>`+
+    c.evidence.map(r=>`<tr>${r.map(x=>`<td>${esc(String(x??''))}</td>`).join('')}</tr>`).join('')+`</table>`; }
+  if(c.rem?.length){ h+=`<h4>Recommended actions</h4><ul>`+c.rem.map(r=>`<li>${esc(r)}</li>`).join('')+`</ul>`; }
+  $('dBody').innerHTML=h; $('ovl').classList.add('show'); $('drawer').classList.add('show');
+}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
+/* ================= DOWNLOADS ================= */
+function fileStamp(){ return (RESULTS.executedAt||'').slice(0,10); }
+function download(name, text, type){ const b=new Blob([text],{type}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
+function buildReportHtml(R){
+  const rows=R.checks.map(c=>`<tr><td><b>${esc(c.title)}</b><br><small>${c.id} · ${esc(c.detail||'')}</small>${
+    c.evidence?.length?'<br><small>'+c.evidence.map(e=>esc(e.join(' · '))).join('<br>')+'</small>':''}</td>
+    <td>${c.pillar}</td><td>${c.risk}</td><td class="s-${c.status}">${SL[c.status][1]}</td></tr>`).join('');
+  const n=s=>R.checks.filter(c=>c.status===s).length;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Zero Trust Assessment — ${esc(R.tenantName)}</title>
+<style>body{font-family:Inter,system-ui,sans-serif;color:#12331f;max-width:960px;margin:30px auto;padding:0 16px}
+h1{letter-spacing:-.02em}table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#eaf3ec;text-align:left;padding:8px;font-size:11px;text-transform:uppercase}
+td{padding:8px;border-bottom:1px solid #dbe7de;vertical-align:top}
+.s-pass{color:#3f7a24;font-weight:700}.s-fail{color:#b04a3a;font-weight:700}.s-inv{color:#b8860b;font-weight:700}.s-skip{color:#5f7a67}
+small{color:#5f7a67}</style></head><body>
+<h1>Zero Trust Assessment — ${esc(R.tenantName)}</h1>
+<p>Run ${esc(R.executedAt)} · ${R.checks.length} checks (v1 subset) · ${n('pass')} passed / ${n('fail')} failed / ${n('inv')} investigate / ${n('skip')} skipped<br>
+Generated by ZTA (Limon-IT) — engine subset of the MIT-licensed microsoft/zerotrustassessment. Contains sensitive configuration details: share with authorized personnel only.</p>
+<table><tr><th>Check</th><th>Pillar</th><th>Risk</th><th>Status</th></tr>${rows}</table>
+<script type="application/json" id="zta-results">${JSON.stringify(R).replace(/</g,'\\u003c')}<\/script>
+</body></html>`;
+}
+
+/* ================= SHAREPOINT ================= */
+const SP_FOLDER='Zero Trust Assessment';
+function spKey(){ return 'zta-sp-'+(RESULTS?.tenantId||'x'); }
+async function spResolve(url){
+  const u=new URL(url);
+  const site=await graphGET(`/sites/${u.host}:${u.pathname.replace(/\/$/,'')}`,[...CONFIG.baseScopes,CONFIG.spScope]);
+  const drive=await graphGET(`/sites/${site.id}/drive`,[...CONFIG.baseScopes,CONFIG.spScope]);
+  return {site,drive};
+}
+async function spEnsureFolder(driveId){
+  const t=await getToken([...CONFIG.baseScopes,CONFIG.spScope]);
+  await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root/children`,{method:'POST',
+    headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},
+    body:JSON.stringify({name:SP_FOLDER, folder:{}, '@microsoft.graph.conflictBehavior':'fail'})}).catch(()=>{});
+}
+async function spUpload(driveId, name, content, type){
+  const t=await getToken([...CONFIG.baseScopes,CONFIG.spScope]);
+  const r=await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodeURIComponent(SP_FOLDER)}/${encodeURIComponent(name)}:/content`,
+    {method:'PUT', headers:{Authorization:'Bearer '+t,'Content-Type':type}, body:content});
+  if(!r.ok) throw new Error('Upload failed: '+r.status+' '+(await r.text()).slice(0,150));
+  return r.json();
+}
+async function spSave(){
+  if(DEMO_MODE){ $('spStatus').textContent='Demo mode — sign in to save to a real site.'; return; }
+  const url=$('spSiteUrl').value.trim(); if(!url){ $('spStatus').textContent='Enter a site URL first.'; return; }
+  $('spStatus').textContent='Resolving site…';
+  try{
+    const {drive}=await spResolve(url); await spEnsureFolder(drive.id);
+    $('spStatus').textContent='Uploading…';
+    const d=fileStamp();
+    await spUpload(drive.id, `ZTA-report-${d}.html`, buildReportHtml(RESULTS), 'text/html');
+    const item=await spUpload(drive.id, `ZTA-results-${d}.json`, JSON.stringify(RESULTS,null,1), 'application/json');
+    localStorage.setItem(spKey(), JSON.stringify({url, driveId:drive.id}));
+    $('spStatus').innerHTML=`✓ Saved to <a href="${esc(item.webUrl||url)}" target="_blank" rel="noopener">${esc(SP_FOLDER)}</a>. Save every month (or let the automation do it) and use Drift compare against any earlier JSON.`;
+  }catch(e){ $('spStatus').textContent='✗ '+(e.message||e); }
+}
+async function spListHistory(intoDrift){
+  if(DEMO_MODE){ $('spStatus').textContent='Demo mode — no SharePoint access.'; return; }
+  const url=$('spSiteUrl').value.trim(); if(!url){ $('spStatus').textContent='Enter a site URL first.'; return; }
+  $('spStatus').textContent='Reading history…';
+  try{
+    const {drive}=await spResolve(url);
+    const items=await graphGET(`/drives/${drive.id}/root:/${encodeURIComponent(SP_FOLDER)}:/children?$top=200`,[...CONFIG.baseScopes,CONFIG.spScope]);
+    const jsons=(items||[]).filter(i=>i.name.endsWith('.json')).sort((a,b)=>b.name.localeCompare(a.name));
+    $('spStatus').textContent=jsons.length? '' : 'No results JSONs found in "'+SP_FOLDER+'".';
+    $('spHistory').innerHTML='';
+    for(const it of jsons){
+      const div=document.createElement('div'); div.className='hist-item';
+      div.innerHTML=`<span>🗓</span><b>${esc(it.name)}</b><span class="mini">${(it.size/1024).toFixed(1)} KB</span><span class="spacer"></span><span class="mini">${intoDrift?'compare →':'view →'}</span>`;
+      div.onclick=async()=>{
+        const t=await getToken([...CONFIG.baseScopes,CONFIG.spScope]);
+        const r=await fetch(`https://graph.microsoft.com/v1.0/drives/${drive.id}/items/${it.id}/content`,{headers:{Authorization:'Bearer '+t}});
+        const prev=await r.json();
+        if(intoDrift){ closeModal('spModal'); openModal('driftModal'); renderDrift(prev, it.name); }
+        else { renderDrift(prev, it.name); openModal('driftModal'); }
+      };
+      $('spHistory').appendChild(div);
+    }
+  }catch(e){ $('spStatus').textContent='✗ '+(e.message||e); }
+}
+
+/* ================= DRIFT UI ================= */
+function renderDrift(prev, label){
+  const d=compareRuns(prev, RESULTS);
+  const sec=(t,items)=>items.length?`<h4 style="margin:12px 0 6px;font-size:13px">${t}</h4>`+
+    `<table class="evi"><tr><th>Check</th><th>Pillar</th><th>Risk</th><th>Status</th></tr>`+
+    items.map(c=>`<tr><td>${esc(c.id)} ${esc(c.title||'')}</td><td>${esc(c.pillar||'')}</td><td>${esc(c.risk||'')}</td><td>${esc(c.status)}</td></tr>`).join('')+`</table>`:'';
+  $('driftOut').innerHTML=
+    `<p class="mini">Baseline: <b>${esc(label||prev.executedAt||'previous run')}</b> → current run ${esc(RESULTS.executedAt)}</p>
+     <div class="driftgrid">
+       <div class="dcell"><b style="color:var(--off)">${d.regressed.length}</b><span class="mini">❌ regressed</span></div>
+       <div class="dcell"><b style="color:var(--on)">${d.fixed.length}</b><span class="mini">✅ fixed</span></div>
+       <div class="dcell"><b>${d.added.length}</b><span class="mini">🆕 new checks</span></div>
+       <div class="dcell"><b>${d.removed.length}</b><span class="mini">➖ removed</span></div>
+     </div>`+sec('❌ Regressed',d.regressed)+sec('✅ Fixed',d.fixed)+sec('🆕 New checks',d.added);
+}
+
+/* ================= WIRING ================= */
+function openModal(id){ $(id).classList.add('show'); }
+function closeModal(id){ $(id).classList.remove('show'); }
+function closeDrawer(){ $('ovl').classList.remove('show'); $('drawer').classList.remove('show'); }
+function updateScopeBox(){
+  const s=[...CONFIG.baseScopes]; if($('pDevices').checked) s.push(CONFIG.intuneScope);
+  $('scopeBox').innerHTML='<b>Delegated read-only scopes for this run:</b> '+s.map(x=>'<code>'+x+'</code>').join(' ')+
+    (DEMO_MODE?'<br><b>Demo mode:</b> nothing is fetched — sample data runs through the real engine.':'');
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.pillar-opt input').forEach(cb=>cb.addEventListener('change',()=>{
+    cb.closest('.pillar-opt').classList.toggle('sel',cb.checked); updateScopeBox();}));
+  updateScopeBox();
+  $('signInBtn').onclick=async()=>{
+    try{ await ensureMsal();
+      const r=await msalApp.loginPopup({scopes:CONFIG.baseScopes});
+      account=r.account; DEMO_MODE=false;
+      $('tenantName').textContent=account.tenantId; $('tenantUser').textContent=account.username;
+      $('avatar').textContent=(account.name||account.username||'?').slice(0,2).toUpperCase();
+      show('run');
+    }catch(e){ if(e.message!=='no clientId') alert('Sign-in failed: '+(e.message||e)); }};
+  $('signOutBtn').onclick=()=>{ if(msalApp&&account) msalApp.logoutPopup({account}).catch(()=>{}); account=null; show('login'); };
+  $('startBtn').onclick=runAssessment;
+  $('rerunBtn').onclick=()=>{ $('runSetup').style.display=''; $('runProgress').style.display='none'; show('run'); };
+  $('dlHtmlBtn').onclick=()=>download(`ZTA-report-${fileStamp()}.html`, buildReportHtml(RESULTS), 'text/html');
+  $('dlJsonBtn').onclick=()=>download(`ZTA-results-${fileStamp()}.json`, JSON.stringify(RESULTS,null,1), 'application/json');
+  $('spBtn').onclick=()=>{ const saved=localStorage.getItem(spKey());
+    if(saved){ try{ $('spSiteUrl').value=JSON.parse(saved).url; }catch(e){} } openModal('spModal'); };
+  $('spCloseBtn').onclick=()=>closeModal('spModal');
+  $('spSaveBtn').onclick=spSave;
+  $('spHistBtn').onclick=()=>spListHistory(false);
+  $('driftBtn').onclick=()=>{ $('driftOut').innerHTML=''; openModal('driftModal'); };
+  $('driftCloseBtn').onclick=()=>closeModal('driftModal');
+  $('driftSpBtn').onclick=()=>{ closeModal('driftModal'); openModal('spModal'); spListHistory(true); };
+  $('driftFile').addEventListener('change',ev=>{ const f=ev.target.files[0]; if(!f)return;
+    const rd=new FileReader(); rd.onload=()=>{ try{ renderDrift(JSON.parse(rd.result), f.name); }catch(e){ $('driftOut').textContent='Not a valid results JSON.'; } }; rd.readAsText(f); });
+  $('q').addEventListener('input',renderRows);
+  document.querySelectorAll('.fchip').forEach(ch=>ch.onclick=()=>{ curSt=ch.dataset.st;
+    document.querySelectorAll('.fchip').forEach(x=>x.classList.remove('active')); ch.classList.add('active'); renderRows(); });
+  $('ovl').onclick=closeDrawer; $('dcloseBtn').onclick=closeDrawer;
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeDrawer(); closeModal('spModal'); closeModal('driftModal'); }});
+  if(DEMO_MODE){ $('tenantName').textContent='Contoso B.V. (demo)'; $('tenantUser').textContent='demo@contoso.nl';
+    $('avatar').textContent='CD'; show('run'); }
+});
+</script>
+</body>
+</html>
