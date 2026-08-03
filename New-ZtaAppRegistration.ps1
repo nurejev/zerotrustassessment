@@ -44,8 +44,44 @@ $params = @{
 }
 $app = if ($AppObjectId) { Get-MgApplication -ApplicationId $AppObjectId }
        else { Get-MgApplication -Filter "displayName eq '$DisplayName'" | Select-Object -First 1 }
-if ($app) { Update-MgApplication -ApplicationId $app.Id @params; Write-Host "Updated: $($app.AppId)" }
-else      { $app = New-MgApplication @params;                    Write-Host "Created: $($app.AppId)" }
+
+if ($app) {
+    # ---- capture state BEFORE the update, so we can report exactly what changed ----
+    $scopeName = @{}; $graphSp.Oauth2PermissionScopes | ForEach-Object { $scopeName[$_.Id] = $_.Value }
+    $beforeScopes = @(($app.RequiredResourceAccess |
+        Where-Object ResourceAppId -eq '00000003-0000-0000-c000-000000000000').ResourceAccess |
+        Where-Object Type -eq 'Scope' | ForEach-Object { $scopeName[$_.Id] })
+    $beforeUris   = @($app.Spa.RedirectUris)
+
+    Update-MgApplication -ApplicationId $app.Id @params
+    Write-Host "Updated: $($app.AppId)"
+
+    # ---- change report ----
+    $addedScopes   = @($delegatedScopes | Where-Object { $_ -notin $beforeScopes })
+    $removedScopes = @($beforeScopes    | Where-Object { $_ -notin $delegatedScopes })
+    $addedUris     = @($RedirectUris    | Where-Object { $_ -notin $beforeUris })
+    $removedUris   = @($beforeUris      | Where-Object { $_ -notin $RedirectUris })
+
+    Write-Host ''
+    Write-Host '========== CHANGE REPORT ==========' -ForegroundColor Green
+    if ($addedScopes)   { Write-Host "  + scopes added:    $($addedScopes -join ', ')" -ForegroundColor Yellow }
+    if ($removedScopes) { Write-Host "  - scopes removed:  $($removedScopes -join ', ')" }
+    if ($addedUris)     { Write-Host "  + redirect URIs:   $($addedUris -join ', ')" }
+    if ($removedUris)   { Write-Host "  - redirect URIs:   $($removedUris -join ', ')" }
+    if (-not ($addedScopes -or $removedScopes -or $addedUris -or $removedUris)) {
+        Write-Host '  no changes — registration already matched.'
+    }
+    if ($addedScopes) {
+        Write-Host ''
+        Write-Host '  ⚠ New scopes need FRESH ADMIN CONSENT:' -ForegroundColor Yellow
+        Write-Host '    - your own tenant: Entra portal → App registrations → API permissions → Grant admin consent'
+        Write-Host '    - customer tenants: resend the consent URL below. Until then, the checks needing these'
+        Write-Host '      scopes show as Skipped in the app.'
+    }
+} else {
+    $app = New-MgApplication @params
+    Write-Host "Created: $($app.AppId)  (new registration — all $($delegatedScopes.Count) scopes are new)"
+}
 
 Write-Host ''
 Write-Host "clientId  → paste into CONFIG.clientId in index.html:  $($app.AppId)"
