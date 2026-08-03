@@ -85,6 +85,10 @@ main{max-width:1180px;margin:0 auto;padding:28px 24px 80px}
 .scard .num{font-size:28px;font-weight:700;letter-spacing:-.03em}
 .scard .lbl{font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
 .scard.f .num{color:var(--off)} .scard.p .num{color:var(--on)} .scard.i .num{color:var(--report)}
+.scard.click{cursor:pointer;transition:.12s}
+.scard.click:hover{border-color:var(--accent2);transform:translateY(-1px)}
+.risklink{cursor:pointer}
+.risklink:hover{color:var(--accent2);text-decoration:underline}
 .ovgrid{display:grid;grid-template-columns:340px 1fr;gap:14px;margin-bottom:22px}
 @media(max-width:840px){.ovgrid{grid-template-columns:1fr}}
 .ovgrid3{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:14px;margin-bottom:22px}
@@ -293,7 +297,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
 
 <footer><span id="buildStampFooter"></span> · Limon-IT · engine inspired by the MIT-licensed <a href="https://github.com/microsoft/zerotrustassessment" target="_blank" rel="noopener">microsoft/zerotrustassessment</a> · sibling of <a href="https://enca.limon-it.nl" target="_blank" rel="noopener">ENCA</a></footer>
 
-<!-- drawer -->
+<!-- detail blade -->
 <div class="overlay" id="ovl"></div>
 <aside class="drawer" id="drawer">
   <div class="dhead">
@@ -351,7 +355,7 @@ const CONFIG = {
   pimScope: 'RoleManagement.Read.Directory',   // PIM eligibility check, optional (403 → skip)
   reportScope: 'AuditLog.Read.All',            // MFA registration report, optional (403 → skip)
   version: '0.3',
-  build: '2026.08.03-5'          // bump on every deploy — shown on sign-in + footer, à la ENCA
+  build: '2026.08.03-6'          // bump on every deploy — shown on sign-in + footer, à la ENCA
 };
 
 /* ================= CHECKS (pure, testable) ================= */
@@ -819,18 +823,21 @@ function renderReport(){
   const n=s=>cs.filter(c=>c.status===s).length;
   const testable=cs.length-n('skip'), score=testable?Math.round(n('pass')/testable*100):0;
   $('sumCards').innerHTML=
-    `<div class="scard p"><div class="num">${n('pass')}</div><div class="lbl">Passed</div></div>
-     <div class="scard f"><div class="num">${n('fail')}</div><div class="lbl">Failed</div></div>
-     <div class="scard i"><div class="num">${n('inv')}</div><div class="lbl">Investigate</div></div>
-     <div class="scard"><div class="num" style="color:var(--muted)">${n('skip')}</div><div class="lbl">Skipped</div></div>
-     <div class="scard"><div class="num">${score}<span style="font-size:16px;color:var(--muted)">%</span></div><div class="lbl">Score (passed / testable)</div></div>`;
+    `<div class="scard p click" data-st="pass"><div class="num">${n('pass')}</div><div class="lbl">Passed</div></div>
+     <div class="scard f click" data-st="fail"><div class="num">${n('fail')}</div><div class="lbl">Failed</div></div>
+     <div class="scard i click" data-st="inv"><div class="num">${n('inv')}</div><div class="lbl">Investigate</div></div>
+     <div class="scard click" data-st="skip"><div class="num" style="color:var(--muted)">${n('skip')}</div><div class="lbl">Skipped</div></div>
+     <div class="scard click" data-st="all"><div class="num">${score}<span style="font-size:16px;color:var(--muted)">%</span></div><div class="lbl">Score (passed / testable)</div></div>`;
+  $('sumCards').querySelectorAll('.scard.click').forEach(c=>c.onclick=()=>gotoStatus(c.dataset.st));
   $('tenantInfo').innerHTML=
     `<span class="k">Tenant</span><span>${esc(R.tenantName)}</span>
      <span class="k">Tenant ID</span><span style="font-family:ui-monospace,monospace;font-size:12px">${esc(R.tenantId)}</span>
      <span class="k">Ran as</span><span>${esc(R.account||'—')}</span>
      <span class="k">Engine</span><span>zta-web ${R.version} — subset of microsoft/zerotrustassessment</span>`;
   $('topRisks').innerHTML=cs.filter(c=>c.status==='fail'&&c.risk==='High').slice(0,4)
-    .map(c=>`<span class="risk High">High</span> ${esc(c.title)}<br>`).join('')||'<span class="mini">No failed high-risk checks 🎉</span>';
+    .map(c=>`<span class="risk High">High</span> <span class="risklink" data-id="${c.id}">${esc(c.title)}</span><br>`).join('')||'<span class="mini">No failed high-risk checks 🎉</span>';
+  $('topRisks').querySelectorAll('.risklink').forEach(el=>el.onclick=()=>{
+    const c=RESULTS.checks.find(x=>x.id===el.dataset.id); if(c) openDrawer(c); });
   const tiles=R.counts||{};
   $('dirTiles').innerHTML=[['Users',tiles.users],['Guests',tiles.guests],['Groups',tiles.groups],['Devices',tiles.devices]]
     .map(([l,v])=>`<div class="tile"><b>${v??'—'}</b><span>${l}</span></div>`).join('');
@@ -845,10 +852,16 @@ function renderReport(){
       </div><span class="pct"><b>${p}/${tot-s}</b> tests</span></div>`;}).join('');
   renderSankeys(R);
   const seg=$('pillarSeg'); seg.innerHTML='';
-  ['Overview',...pillars].forEach(pl=>{const b=document.createElement('button'); b.textContent=pl;
+  ['Overview','All checks',...pillars].forEach(pl=>{const b=document.createElement('button'); b.textContent=pl;
     if(pl===curPillar) b.className='active';
     b.onclick=()=>setTab(pl,b); seg.appendChild(b);});
   setTab(curPillar);
+}
+function gotoStatus(st){
+  curSt=st;
+  document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('active', x.dataset.st===st));
+  setTab('All checks');
+  window.scrollTo(0,0);
 }
 /* --- mini sankey (3 columns, SVG, no libs) --- */
 function drawSankey(el, nodes, links){
@@ -914,7 +927,7 @@ function setTab(pl, btn){
 }
 function renderRows(){
   const q=($('q').value||'').toLowerCase(), tb=$('rows'); tb.innerHTML='';
-  RESULTS.checks.filter(c=>(curPillar==='Overview'||c.pillar===curPillar)&&(curSt==='all'||c.status===curSt)
+  RESULTS.checks.filter(c=>(curPillar==='Overview'||curPillar==='All checks'||c.pillar===curPillar)&&(curSt==='all'||c.status===curSt)
       &&(!q||c.title.toLowerCase().includes(q)||c.id.toLowerCase().includes(q)))
     .forEach(c=>{const tr=document.createElement('tr');
       tr.innerHTML=`<td><div class="tname">${esc(c.title)}</div><div class="tid">${c.id}</div></td>
