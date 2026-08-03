@@ -35,5 +35,7 @@ The browser app is interactive and covers the v1 subset. **Unattended monthly ru
 | `New-ZtaAppRegistration.ps1` | SPA app registration (delegated, read-only) |
 | `automation/` | Scheduled multi-customer runs — move to a private repo |
 | `TODO.md` | Full build plan |
+| `SETUP-GITHUB.md` | Push, Pages, DNS, private automation repo |
+| `CNAME` | Custom domain for GitHub Pages |
 
 License note: check engine inspired by and mapped to the MIT-licensed microsoft/zerotrustassessment; keep attribution.
