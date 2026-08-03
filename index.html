@@ -188,7 +188,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
       <h1>Run the assessment</h1>
       <p class="mini" style="margin-bottom:4px">v1 subset — Identity baseline + Intune basics. Permissions are delegated and read-only.</p>
       <div class="pillar-grid">
-        <label class="pillar-opt sel"><input type="checkbox" id="pIdentity" checked><span><b>🪪 Identity</b> <span class="mini">16 checks · CA, auth methods, apps &amp; consent, roles</span></span></label>
+        <label class="pillar-opt sel"><input type="checkbox" id="pIdentity" checked><span><b>🪪 Identity</b> <span class="mini">25 checks · CA, auth methods, apps &amp; consent, roles, PIM, guests</span></span></label>
         <label class="pillar-opt"><input type="checkbox" id="pDevices"><span><b>💻 Devices</b> <span class="mini">1 check · Intune compliance coverage (asks for Intune read scope)</span></span></label>
       </div>
       <div class="scopebox" id="scopeBox"></div>
@@ -315,7 +315,9 @@ const CONFIG = {
   baseScopes: ['User.Read','Policy.Read.All','Directory.Read.All'],
   intuneScope: 'DeviceManagementConfiguration.Read.All',
   spScope: 'Sites.ReadWrite.All',
-  version: '0.1'
+  pimScope: 'RoleManagement.Read.Directory',   // PIM eligibility check, optional (403 → skip)
+  reportScope: 'AuditLog.Read.All',            // MFA registration report, optional (403 → skip)
+  version: '0.2'
 };
 
 /* ================= CHECKS (pure, testable) ================= */
@@ -464,6 +466,84 @@ const CHECKS = [
     return rot.length ? {status:'inv', detail:`${rot.length} domain(s) still expire passwords.`, evidence:rot.map(d=>[d.id,`validity ${d.passwordValidityPeriodInDays} d`,''])}
       : {status:'pass', detail:'Passwords are set to never expire.'}; } },
 
+{ id:'ZTA-017', title:'Admin consent workflow is enabled', pillar:'Identity', risk:'Medium',
+  why:'Without a request path, blocked user consent turns into shadow-IT pressure or admins consenting ad hoc.',
+  rem:['Enable the admin consent workflow with named reviewers and expiry.'],
+  run(D){ if(D.adminConsent===undefined) return {status:'inv', detail:'Could not read the admin consent request policy.'};
+    return D.adminConsent?.isEnabled ? {status:'pass', detail:'Admin consent workflow is enabled.'}
+      : {status:'fail', detail:'Admin consent workflow is disabled — users have no sanctioned path to request app approval.'}; } },
+
+{ id:'ZTA-018', title:'Workload identities have no long-lived secrets', pillar:'Identity', risk:'Medium',
+  why:'Service-principal secrets valid for years are durable stolen credentials.',
+  rem:['Replace long-lived SP secrets with certificates, managed identities or federated credentials.'],
+  run(D){ if(!D.sps) return {status:'inv', detail:'Could not read service principals.'};
+    const bad=[];
+    for(const s of D.sps) for(const c of (s.passwordCredentials||[])){
+      const life=H.days(new Date(c.endDateTime)-new Date(c.startDateTime));
+      if(life>730) bad.push([s.displayName, `secret lifetime ${life} d`, `expires ${String(c.endDateTime).slice(0,10)}`]); }
+    return bad.length ? {status:'fail', detail:`${bad.length} service-principal secret(s) with a lifetime over 2 years.`, evidence:bad.slice(0,25)}
+      : {status:'pass', detail:'No service-principal secrets with a lifetime over 2 years.'}; } },
+
+{ id:'ZTA-019', title:'Guest access requires MFA', pillar:'Identity', risk:'High',
+  why:'Guests authenticate in your tenant with their home credentials — MFA must still be enforced here.',
+  rem:['Ensure guests are in scope of an MFA policy (dedicated guest policy or the all-users policy without guest exclusions).'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.hasMfa(p));
+    const guestPol=pol.filter(p=>{const u=p.conditions?.users||{};
+      return (u.includeUsers||[]).includes('GuestsOrExternalUsers')||u.includeGuestsOrExternalUsers;});
+    if(guestPol.length) return {status:'pass', detail:`Guest-targeted MFA policy: ${guestPol.map(p=>p.displayName).join(', ')}`};
+    const allPol=pol.filter(p=>H.targetsAllUsers(p)&&!((p.conditions?.users?.excludeUsers||[]).includes('GuestsOrExternalUsers')||p.conditions?.users?.excludeGuestsOrExternalUsers));
+    return allPol.length ? {status:'pass', detail:'Guests are covered via the all-users MFA policy (no guest exclusion found).'}
+      : {status:'fail', detail:'No enabled MFA policy covers guest users.'}; } },
+
+{ id:'ZTA-020', title:'Device-based Conditional Access is in use', pillar:'Identity', risk:'Medium',
+  why:'Requiring compliant or hybrid-joined devices ties access to device health.',
+  rem:['Add a policy requiring a compliant device (or hybrid join) for sensitive apps or all users.'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&((p.grantControls?.builtInControls||[]).includes('compliantDevice')||(p.grantControls?.builtInControls||[]).includes('domainJoinedDevice')));
+    return pol.length ? {status:'pass', detail:`Device controls enforced by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'fail', detail:'No enabled policy requires a compliant or hybrid-joined device.'}; } },
+
+{ id:'ZTA-021', title:'Sign-in frequency is controlled for privileged roles', pillar:'Identity', risk:'Low',
+  why:'Short session lifetimes for admins limit the value of a stolen token.',
+  rem:['Add sign-in frequency (and disable persistent browser sessions) on the admin CA policy.'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsRoles(p)&&p.sessionControls?.signInFrequency?.isEnabled);
+    return pol.length ? {status:'pass', detail:`Sign-in frequency set by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'inv', detail:'No role-targeted policy sets a sign-in frequency.'}; } },
+
+{ id:'ZTA-022', title:'No lingering report-only policies', pillar:'Identity', risk:'Low',
+  why:'Report-only is a staging state — policies parked there protect nobody.',
+  rem:['Review report-only policies: enable them or remove them.'],
+  run(D){ const ro=(D.ca||[]).filter(p=>p.state==='enabledForReportingButNotEnforced');
+    return ro.length ? {status:'inv', detail:`${ro.length} polic${ro.length>1?'ies are':'y is'} still report-only.`, evidence:ro.map(p=>[p.displayName,'report-only',String(p.modifiedDateTime||p.createdDateTime||'').slice(0,10)])}
+      : {status:'pass', detail:'No report-only policies.'}; } },
+
+{ id:'ZTA-023', title:'No stale unredeemed guest invitations', pillar:'Identity', risk:'Medium',
+  why:'Never-redeemed invitations are dormant access waiting to be hijacked.',
+  rem:['Delete guests whose invitation is older than 90 days and never accepted; add an access-review cadence for guests.'],
+  run(D){ if(!D.guests) return {status:'inv', detail:'Could not read guest users.'};
+    const now=Date.now(), stale=D.guests.filter(g=>g.externalUserState==='PendingAcceptance'&&g.createdDateTime&&H.days(now-new Date(g.createdDateTime))>90);
+    const note=D.guestsPartial?' (large tenant — first pages only, treat as a sample)':'';
+    return stale.length ? {status:'fail', detail:`${stale.length} guest invitation(s) pending for over 90 days${note}.`, evidence:stale.slice(0,25).map(g=>[g.displayName||g.id,'PendingAcceptance','invited '+String(g.createdDateTime).slice(0,10)])}
+      : {status:'pass', detail:`No unredeemed guest invitations older than 90 days${note}.`}; } },
+
+{ id:'ZTA-024', title:'Global Administrators use PIM eligibility, not standing access', pillar:'Identity', risk:'High', license:'Entra ID P2',
+  why:'Permanent GA assignments are standing attack surface; PIM makes them just-in-time.',
+  rem:['Convert permanent Global Administrator assignments to PIM-eligible with approval and MFA on activation.'],
+  run(D){ if(D.pimGA===undefined) return {status:'skip', detail:'PIM data not readable (missing RoleManagement.Read.Directory or no P2).'};
+    const eligible=(D.pimGA||[]).length, standing=(D.gaMembers||[]).length;
+    return eligible>0 ? {status:'pass', detail:`${eligible} PIM-eligible Global Administrator assignment(s); ${standing} currently active.`}
+      : {status:'fail', detail:`No PIM-eligible Global Administrator assignments — all ${standing} GA assignments are permanent.`}; } },
+
+{ id:'ZTA-025', title:'MFA registration covers at least 95% of users', pillar:'Identity', risk:'Medium',
+  why:'An MFA policy only protects users who have actually registered a method.',
+  rem:['Run a registration campaign; target the unregistered users listed in the authentication methods report.'],
+  run(D){ if(D.regReport===undefined) return {status:'skip', detail:'Registration report not readable (missing AuditLog.Read.All or insufficient role).'};
+    const total=D.regReport?.totalUserCount||0;
+    const mfa=(D.regReport?.userRegistrationFeatureCounts||[]).find(f=>f.feature==='mfaCapable')?.userCount||0;
+    if(!total) return {status:'inv', detail:'Registration report returned no users.'};
+    const pct=Math.round(mfa/total*100);
+    return pct>=95 ? {status:'pass', detail:`${pct}% of ${total} users are MFA-capable.`}
+      : {status:'fail', detail:`Only ${pct}% of ${total} users are MFA-capable (target ≥95%).`}; } },
+
 { id:'ZTA-101', title:'Intune compliance policies cover the platforms in use', pillar:'Devices', risk:'High', dataset:'compliance',
   why:'Device compliance is the anchor for device-based Conditional Access.',
   rem:['Create compliance policies for every managed platform and assign them.'],
@@ -527,7 +607,13 @@ const DEMO = {
     {displayName:'Modern-App', passwordCredentials:[{startDateTime:'2026-01-01T00:00:00Z',endDateTime:'2026-12-31T00:00:00Z'}]}],
   domains:[{id:'contoso.nl',isVerified:true,passwordValidityPeriodInDays:90},{id:'contoso.onmicrosoft.com',isVerified:true,passwordValidityPeriodInDays:2147483647}],
   compliance:[{displayName:'Win10/11 baseline','@odata.type':'#microsoft.graph.windows10CompliancePolicy'},
-              {displayName:'iOS baseline','@odata.type':'#microsoft.graph.iosCompliancePolicy'}]
+              {displayName:'iOS baseline','@odata.type':'#microsoft.graph.iosCompliancePolicy'}],
+  adminConsent:{isEnabled:false},
+  sps:[{displayName:'Automation-SP', passwordCredentials:[{startDateTime:'2024-01-01T00:00:00Z',endDateTime:'2030-01-01T00:00:00Z'}]}],
+  guests:[{displayName:'partner@fabrikam.com', externalUserState:'PendingAcceptance', createdDateTime:'2025-09-15T00:00:00Z'},
+          {displayName:'consultant@tailwind.nl', externalUserState:'Accepted', createdDateTime:'2026-06-01T00:00:00Z'}],
+  pimGA:[],
+  regReport:{totalUserCount:1284, userRegistrationFeatureCounts:[{feature:'mfaCapable',userCount:1042}]}
 };
 /*ZTA-DEMO-END*/
 
@@ -567,14 +653,15 @@ async function getToken(scopes){
 async function graphGET(path, scopes, opt={}){
   const token=await getToken(scopes||CONFIG.baseScopes);
   let url=path.startsWith('http')?path:'https://graph.microsoft.com/v1.0'+path;
-  const items=[]; let single=null;
+  const items=[]; let single=null, pages=0;
   while(url){
     const r=await fetch(url,{headers:{Authorization:'Bearer '+token, ...(opt.headers||{})}});
     if(r.status===429||r.status===503){ await new Promise(x=>setTimeout(x, 1000*(parseInt(r.headers.get('Retry-After'))||3))); continue; }
     if(!r.ok){ const t=await r.text(); const err=new Error(`${r.status} ${path}: ${t.slice(0,200)}`); err.status=r.status; throw err; }
     if(opt.raw) return r;
     const j=await r.json();
-    if(Array.isArray(j.value)){ items.push(...j.value); url=j['@odata.nextLink']||null; }
+    if(Array.isArray(j.value)){ items.push(...j.value); url=j['@odata.nextLink']||null;
+      if(opt.maxPages && ++pages>=opt.maxPages && url){ items.partial=true; url=null; } }
     else { single=j; url=null; }
   }
   return single??items;
@@ -593,7 +680,7 @@ async function runAssessment(){
   try{
     if(DEMO_MODE){
       Object.assign(D, DEMO);
-      const steps=['users & organization','conditionalAccessPolicies (4)','authorizationPolicy','authenticationMethodsPolicy','namedLocations (2)','directoryRoles: Global Administrator (10)','applications (2)','domains (2)','deviceCompliancePolicies (2)'];
+      const steps=['users & organization','conditionalAccessPolicies (4)','authorizationPolicy','authenticationMethodsPolicy','namedLocations (2)','directoryRoles: Global Administrator (10)','applications (2)','domains (2)','adminConsentRequestPolicy','servicePrincipals (1)','guests (2)','PIM eligibility (0)','authMethods registration report','deviceCompliancePolicies (2)'];
       for(let i=0;i<steps.length;i++){ log('✓ dataset '+steps[i],'ok'); prog(Math.round((i+1)/steps.length*60),'Fetching datasets…'); await new Promise(x=>setTimeout(x,240)); }
       if(!$('pDevices').checked) delete D.compliance;
     } else {
@@ -606,7 +693,12 @@ async function runAssessment(){
         ['secDefaults', ()=>graphGET('/policies/identitySecurityDefaultsEnforcementPolicy')],
         ['gaMembers', ()=>graphGET("/directoryRoles(roleTemplateId='62e90394-69f5-4237-9190-012177145e10')/members?$select=id,displayName,userPrincipalName").catch(e=>e.status===404?[]:Promise.reject(e))],
         ['apps', ()=>graphGET('/applications?$select=id,displayName,passwordCredentials&$top=999')],
-        ['domains', ()=>graphGET('/domains')]
+        ['domains', ()=>graphGET('/domains')],
+        ['adminConsent', ()=>graphGET('/policies/adminConsentRequestPolicy')],
+        ['sps', ()=>graphGET('/servicePrincipals?$select=id,displayName,passwordCredentials&$top=999',null,{maxPages:10})],
+        ['guests', async()=>{ const g=await graphGET("/users?$filter=userType eq 'Guest'&$select=id,displayName,externalUserState,createdDateTime&$top=999",null,{maxPages:5}); return g; }],
+        ['pimGA', ()=>graphGET("/roleManagement/directory/roleEligibilitySchedules?$filter=roleDefinitionId eq '62e90394-69f5-4237-9190-012177145e10'",[...CONFIG.baseScopes,CONFIG.pimScope])],
+        ['regReport', ()=>graphGET('/reports/authenticationMethods/usersRegisteredByFeature',[...CONFIG.baseScopes,CONFIG.reportScope])]
       ];
       if($('pDevices').checked) sets.push(['compliance', ()=>graphGET('/deviceManagement/deviceCompliancePolicies',[...CONFIG.baseScopes,CONFIG.intuneScope])]);
       for(let i=0;i<sets.length;i++){
@@ -614,6 +706,7 @@ async function runAssessment(){
         try{ D[k]=await fn(); log(`✓ dataset ${k}${Array.isArray(D[k])?' ('+D[k].length+')':''}`,'ok'); }
         catch(e){ log(`✗ dataset ${k}: ${e.message}`,'err'); D[k]=undefined; }
       }
+      D.guestsPartial=!!(D.guests&&D.guests.partial);
       const org=Array.isArray(D.org)?D.org[0]:D.org;
       D.tenantName=org?.displayName||'—'; D.tenantId=org?.id||'—';
       D.hasP2=!!org?.assignedPlans?.some(p=>p.servicePlanId==='eec0eb4f-6444-4f95-aba0-50c24d67f998'&&p.capabilityStatus==='Enabled');

@@ -22,6 +22,8 @@ $delegatedScopes = @(
     'Directory.Read.All'
     'DeviceManagementConfiguration.Read.All'   # Devices pillar, on demand
     'Sites.ReadWrite.All'                      # Save to SharePoint, on demand
+    'RoleManagement.Read.Directory'            # PIM eligibility check (ZTA-024)
+    'AuditLog.Read.All'                        # MFA registration report (ZTA-025)
 )
 
 Import-Module Microsoft.Graph.Applications -ErrorAction Stop
