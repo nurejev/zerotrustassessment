@@ -87,6 +87,12 @@ main{max-width:1180px;margin:0 auto;padding:28px 24px 80px}
 .scard.f .num{color:var(--off)} .scard.p .num{color:var(--on)} .scard.i .num{color:var(--report)}
 .ovgrid{display:grid;grid-template-columns:340px 1fr;gap:14px;margin-bottom:22px}
 @media(max-width:840px){.ovgrid{grid-template-columns:1fr}}
+.ovgrid3{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:14px;margin-bottom:22px}
+@media(max-width:980px){.ovgrid3{grid-template-columns:1fr}}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--soft2)}
+.tile b{font-size:22px;display:block;letter-spacing:-.02em}
+.tile span{font-size:11.5px;color:var(--muted);font-weight:600}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px}
 .panel h3{font-size:14px;margin-bottom:14px}
 .tinfo{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
@@ -178,6 +184,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
     <div class="login-note">Multi-tenant · delegated read-only Graph permissions · runs entirely in your browser.</div>
     <div class="login-note"><a href="?demo=1">Run the demo with sample data →</a></div>
     <div class="login-note">Based on the MIT-licensed <a href="https://github.com/microsoft/zerotrustassessment" target="_blank" rel="noopener">microsoft/zerotrustassessment</a>.</div>
+    <div class="login-note" id="buildStampLogin" title="Build number — if this is not the version you pushed, hard-refresh" style="opacity:.7"></div>
   </div>
 </section>
 
@@ -219,28 +226,36 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
     </div>
   </div>
 
+  <div class="seg" id="pillarSeg" style="display:inline-flex;margin-bottom:18px"></div>
+
+  <div id="ovDash">
   <div class="cards" id="sumCards"></div>
 
-  <div class="ovgrid">
+  <div class="ovgrid3">
     <div class="panel">
-      <h3>Tenant</h3>
+      <h3>🏢 Tenant</h3>
       <div class="tinfo" id="tenantInfo"></div>
-      <h3 style="margin-top:20px">Top risks to fix first</h3>
-      <div class="mini" id="topRisks" style="line-height:2"></div>
     </div>
     <div class="panel">
-      <h3>Result per pillar</h3>
+      <h3>📇 Directory</h3>
+      <div class="tiles" id="dirTiles"></div>
+    </div>
+    <div class="panel">
+      <h3>🛡 Assessment</h3>
       <div id="pillarBars"></div>
-      <p class="mini" style="margin-top:8px">v1 covers a curated subset of Microsoft's 328 checks. Full-coverage scheduled runs: see the monthly automation (GitHub Actions + PowerShell module).</p>
+      <h3 style="margin-top:18px">Top risks to fix first</h3>
+      <div class="mini" id="topRisks" style="line-height:2"></div>
+      <p class="mini" style="margin-top:10px">v1 covers a curated subset of Microsoft's 328 checks. Full coverage runs monthly via the automation.</p>
     </div>
   </div>
+  </div><!-- /ovDash -->
 
+  <div id="checksView" style="display:none">
   <div class="toolbar">
     <div class="search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" placeholder="Search checks…">
     </div>
-    <div class="seg" id="pillarSeg"></div>
     <span class="fchip active" data-st="all">All</span>
     <span class="fchip" data-st="fail">Failed</span>
     <span class="fchip" data-st="inv">Investigate</span>
@@ -254,11 +269,12 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
       <tbody id="rows"></tbody>
     </table>
   </div>
+  </div><!-- /checksView -->
 </section>
 
 </main>
 
-<footer>ZTA v0.1 · Limon-IT · engine inspired by the MIT-licensed <a href="https://github.com/microsoft/zerotrustassessment" target="_blank" rel="noopener">microsoft/zerotrustassessment</a> · sibling of <a href="https://enca.limon-it.nl" target="_blank" rel="noopener">ENCA</a></footer>
+<footer><span id="buildStampFooter"></span> · Limon-IT · engine inspired by the MIT-licensed <a href="https://github.com/microsoft/zerotrustassessment" target="_blank" rel="noopener">microsoft/zerotrustassessment</a> · sibling of <a href="https://enca.limon-it.nl" target="_blank" rel="noopener">ENCA</a></footer>
 
 <!-- drawer -->
 <div class="overlay" id="ovl"></div>
@@ -317,7 +333,8 @@ const CONFIG = {
   spScope: 'Sites.ReadWrite.All',
   pimScope: 'RoleManagement.Read.Directory',   // PIM eligibility check, optional (403 → skip)
   reportScope: 'AuditLog.Read.All',            // MFA registration report, optional (403 → skip)
-  version: '0.2'
+  version: '0.2',
+  build: '2026.08.03-3'          // bump on every deploy — shown on sign-in + footer, à la ENCA
 };
 
 /* ================= CHECKS (pure, testable) ================= */
@@ -613,7 +630,8 @@ const DEMO = {
   guests:[{displayName:'partner@fabrikam.com', externalUserState:'PendingAcceptance', createdDateTime:'2025-09-15T00:00:00Z'},
           {displayName:'consultant@tailwind.nl', externalUserState:'Accepted', createdDateTime:'2026-06-01T00:00:00Z'}],
   pimGA:[],
-  regReport:{totalUserCount:1284, userRegistrationFeatureCounts:[{feature:'mfaCapable',userCount:1042}]}
+  regReport:{totalUserCount:1284, userRegistrationFeatureCounts:[{feature:'mfaCapable',userCount:1042}]},
+  counts:{users:1284, guests:23, groups:214, devices:611}
 };
 /*ZTA-DEMO-END*/
 
@@ -698,7 +716,12 @@ async function runAssessment(){
         ['sps', ()=>graphGET('/servicePrincipals?$select=id,displayName,passwordCredentials&$top=999',null,{maxPages:10})],
         ['guests', async()=>{ const g=await graphGET("/users?$filter=userType eq 'Guest'&$select=id,displayName,externalUserState,createdDateTime&$top=999",null,{maxPages:5}); return g; }],
         ['pimGA', ()=>graphGET("/roleManagement/directory/roleEligibilitySchedules?$filter=roleDefinitionId eq '62e90394-69f5-4237-9190-012177145e10'",[...CONFIG.baseScopes,CONFIG.pimScope])],
-        ['regReport', ()=>graphGET('/reports/authenticationMethods/usersRegisteredByFeature',[...CONFIG.baseScopes,CONFIG.reportScope])]
+        ['regReport', ()=>graphGET('/reports/authenticationMethods/usersRegisteredByFeature',[...CONFIG.baseScopes,CONFIG.reportScope])],
+        ['counts', async()=>{ const c=async p=>{ const t=await getToken(CONFIG.baseScopes);
+            const r=await fetch('https://graph.microsoft.com/v1.0'+p,{headers:{Authorization:'Bearer '+t,ConsistencyLevel:'eventual'}});
+            return r.ok?parseInt(await r.text()):null; };
+          return { users:await c('/users/$count'), guests:await c("/users/$count?$filter=userType eq 'Guest'"),
+                   groups:await c('/groups/$count'), devices:await c('/devices/$count') }; }]
       ];
       if($('pDevices').checked) sets.push(['compliance', ()=>graphGET('/deviceManagement/deviceCompliancePolicies',[...CONFIG.baseScopes,CONFIG.intuneScope])]);
       for(let i=0;i<sets.length;i++){
@@ -715,15 +738,16 @@ async function runAssessment(){
     prog(65,'Evaluating checks…'); log('→ evaluating '+CHECKS.length+' checks');
     const checks=evaluateAll(D, log);
     prog(95,'Rendering report…');
-    RESULTS={app:'zta-web', version:CONFIG.version, executedAt:new Date().toISOString(),
-      tenantId:D.tenantId, tenantName:D.tenantName, account:D.account||'', demo:DEMO_MODE, checks};
+    RESULTS={app:'zta-web', version:CONFIG.version, build:CONFIG.build, executedAt:new Date().toISOString(),
+      tenantId:D.tenantId, tenantName:D.tenantName, account:D.account||'', demo:DEMO_MODE,
+      counts:D.counts||null, checks};
     setTimeout(()=>{ prog(100); renderReport(); show('report'); }, 400);
   } catch(e){ log('✗ '+(e.message||e),'err'); prog(0,'Failed — see log'); }
 }
 
 /* ================= REPORT ================= */
 const SL={pass:['pass','Passed'],fail:['fail','Failed'],inv:['inv','Investigate'],skip:['skip','Skipped']};
-let curPillar='All', curSt='all';
+let curPillar='Overview', curSt='all';
 
 function renderReport(){
   const R=RESULTS, cs=R.checks;
@@ -745,26 +769,36 @@ function renderReport(){
      <span class="k">Engine</span><span>zta-web ${R.version} — subset of microsoft/zerotrustassessment</span>`;
   $('topRisks').innerHTML=cs.filter(c=>c.status==='fail'&&c.risk==='High').slice(0,4)
     .map(c=>`<span class="risk High">High</span> ${esc(c.title)}<br>`).join('')||'<span class="mini">No failed high-risk checks 🎉</span>';
+  const tiles=R.counts||{};
+  $('dirTiles').innerHTML=[['Users',tiles.users],['Guests',tiles.guests],['Groups',tiles.groups],['Devices',tiles.devices]]
+    .map(([l,v])=>`<div class="tile"><b>${v??'—'}</b><span>${l}</span></div>`).join('');
   const pillars=[...new Set(cs.map(c=>c.pillar))];
   $('pillarBars').innerHTML=pillars.map(pl=>{
     const g=cs.filter(c=>c.pillar===pl), tot=g.length,
       p=g.filter(c=>c.status==='pass').length, f=g.filter(c=>c.status==='fail').length,
-      i=g.filter(c=>c.status==='inv').length, s=g.filter(c=>c.status==='skip').length,
-      pc=(tot-s)?Math.round(p/(tot-s)*100):0;
+      i=g.filter(c=>c.status==='inv').length, s=g.filter(c=>c.status==='skip').length;
     return `<div class="pillarbar"><span class="nm">${pl}</span><div class="track">
       <span class="seg-p" style="width:${p/tot*100}%"></span><span class="seg-f" style="width:${f/tot*100}%"></span>
       <span class="seg-i" style="width:${i/tot*100}%"></span><span class="seg-s" style="width:${s/tot*100}%"></span>
-      </div><span class="pct">${pc}% · ${tot} checks</span></div>`;}).join('');
+      </div><span class="pct"><b>${p}/${tot-s}</b> tests</span></div>`;}).join('');
   const seg=$('pillarSeg'); seg.innerHTML='';
-  ['All',...pillars].forEach(pl=>{const b=document.createElement('button'); b.textContent=pl;
-    if(pl===curPillar||((curPillar==='All')&&pl==='All')) b.className='active';
-    b.onclick=()=>{curPillar=pl;seg.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRows();};
-    seg.appendChild(b);});
-  renderRows();
+  ['Overview',...pillars].forEach(pl=>{const b=document.createElement('button'); b.textContent=pl;
+    if(pl===curPillar) b.className='active';
+    b.onclick=()=>setTab(pl,b); seg.appendChild(b);});
+  setTab(curPillar);
+}
+function setTab(pl, btn){
+  curPillar=pl;
+  const seg=$('pillarSeg');
+  seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.textContent===pl));
+  const ov=pl==='Overview';
+  $('ovDash').style.display=ov?'':'none';
+  $('checksView').style.display=ov?'none':'';
+  if(!ov) renderRows();
 }
 function renderRows(){
   const q=($('q').value||'').toLowerCase(), tb=$('rows'); tb.innerHTML='';
-  RESULTS.checks.filter(c=>(curPillar==='All'||c.pillar===curPillar)&&(curSt==='all'||c.status===curSt)
+  RESULTS.checks.filter(c=>(curPillar==='Overview'||c.pillar===curPillar)&&(curSt==='all'||c.status===curSt)
       &&(!q||c.title.toLowerCase().includes(q)||c.id.toLowerCase().includes(q)))
     .forEach(c=>{const tr=document.createElement('tr');
       tr.innerHTML=`<td><div class="tname">${esc(c.title)}</div><div class="tid">${c.id}</div></td>
@@ -896,6 +930,9 @@ function updateScopeBox(){
     (DEMO_MODE?'<br><b>Demo mode:</b> nothing is fetched — sample data runs through the real engine.':'');
 }
 document.addEventListener('DOMContentLoaded',()=>{
+  const stamp=`ZTA v${CONFIG.version} · build ${CONFIG.build}`;
+  $('buildStampLogin').textContent=stamp; $('buildStampFooter').textContent=stamp;
+  console.log(stamp);
   document.querySelectorAll('.pillar-opt input').forEach(cb=>cb.addEventListener('change',()=>{
     cb.closest('.pillar-opt').classList.toggle('sel',cb.checked); updateScopeBox();}));
   updateScopeBox();
