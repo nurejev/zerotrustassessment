@@ -288,6 +288,152 @@ window.CHECK_DOCS = {
    ]
   ]
  },
+ "ZTA-026": {
+  "ztId": "21804",
+  "approx": false,
+  "bg": "When weak authentication methods like SMS and voice calls remain enabled in Microsoft Entra ID, threat actors can exploit these vulnerabilities through multiple attack vectors. Initially, attackers often conduct reconnaissance to identify organizations using these weaker authentication methods through social engineering or technical scanning. Then they can execute initial access through credential stuffing attacks, password spraying, or phishing campaigns targeting user credentials.\n\nOnce basic credentials are compromised, threat actors use these weaknesses in SMS and voice-based authentication. SMS messages can be intercepted through SIM swapping attacks, SS7 network vulnerabilities, or malware on mobile devices, while voice calls are susceptible to voice phishing (vishing) and call forwarding manipulation. With these weak second factors bypassed, attackers achieve persistence by registering their own authentication methods. Compromised accounts can be used to target higher-privileged users through internal phishing or social engineering, allowing attackers to escalate privileges within the organization. Finally, threat actors achieve their objectives through data exfiltration, lateral movement to critical systems, or deployment of other malicious tools, all while maintaining stealth by using legitimate authentication pathways that appear normal in security logs.",
+  "rem": [
+   [
+    "Deploy authentication method registration campaigns to encourage stronger methods",
+    "https://learn.microsoft.com/graph/api/authenticationmethodspolicy-update?view=graph-rest-beta&preserve-view=true&wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ],
+   [
+    "Disable authentication methods",
+    "https://learn.microsoft.com/entra/identity/authentication/concept-authentication-methods-manage?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ],
+   [
+    "Disable phone-based methods in legacy MFA settings",
+    "https://learn.microsoft.com/entra/identity/authentication/howto-mfa-mfasettings?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ],
+   [
+    "Deploy Conditional Access policies using authentication strength",
+    "https://learn.microsoft.com/entra/identity/authentication/concept-authentication-strength-how-it-works?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ]
+  ]
+ },
+ "ZTA-027": {
+  "ztId": "21806",
+  "approx": false,
+  "bg": "Without Conditional Access policies protecting security information registration, threat actors can exploit unprotected registration flows to compromise authentication methods. When users register multifactor authentication and self-service password reset methods without proper controls, threat actors can intercept these registration sessions through adversary-in-the-middle attacks or exploit unmanaged devices accessing registration from untrusted locations. Once threat actors gain access to an unprotected registration flow, they can register their own authentication methods, effectively hijacking the target's authentication profile. The threat actors can bypass security controls and potentially escalate privileges throughout the environment because they can maintain persistent access by controlling the MFA methods. The compromised authentication methods then become the foundation for lateral movement as threat actors can authenticate as the legitimate user across multiple services and applications.",
+  "rem": [
+   [
+    "Deploy a Conditional Access policy for security info registration",
+    "https://learn.microsoft.com/entra/identity/conditional-access/policy-all-users-security-info-registration?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ],
+   [
+    "Configure known network locations",
+    "https://learn.microsoft.com/entra/identity/conditional-access/concept-assignment-network?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ],
+   [
+    "Enable combined security info registration",
+    "https://learn.microsoft.com/entra/identity/authentication/howto-registration-mfa-sspr-combined?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ]
+  ]
+ },
+ "ZTA-028": {
+  "ztId": "21872",
+  "approx": false,
+  "bg": "Threat actors can exploit the lack of multifactor authentication during new device registration. Once authenticated, they can register rogue devices, establish persistence, and circumvent security controls tied to trusted endpoints. This foothold enables attackers to exfiltrate sensitive data, deploy malicious applications, or move laterally, depending on the permissions of the accounts being used by the attacker. Without MFA enforcement, risk escalates as adversaries can continuously reauthenticate, evade detection, and execute objectives.",
+  "rem": [
+   [
+    "Deploy a Conditional Access policy to require multifactor authentication for device registration",
+    "https://learn.microsoft.com/entra/identity/conditional-access/policy-all-users-device-registration?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ]
+  ]
+ },
+ "ZTA-029": {
+  "ztId": "21808",
+  "approx": false,
+  "bg": "Device code flow is a cross-device authentication flow designed for input-constrained devices. It can be exploited in phishing attacks, where an attacker initiates the flow and tricks a user into completing it on their device, thereby sending the user's tokens to the attacker. Given the security risks and the infrequent legitimate use of device code flow, you should enable a Conditional Access policy to block this flow by default.",
+  "rem": [
+   [
+    "Deploy a Conditional Access policy to block device code flow",
+    "https://learn.microsoft.com/entra/identity/conditional-access/policy-block-authentication-flows?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci#device-code-flow-policies"
+   ]
+  ]
+ },
+ "ZTA-030": {
+  "ztId": "21828",
+  "approx": false,
+  "bg": "Blocking authentication transfer in Microsoft Entra ID is a critical security control. It helps protect against token theft and replay attacks by preventing the use of device tokens to silently authenticate on other devices or browsers. When authentication transfer is enabled, a threat actor who gains access to one device can access resources to nonapproved devices, bypassing standard authentication and device compliance checks. When administrators block this flow, organizations can ensure that each authentication request must originate from the original device, maintaining the integrity of the device compliance and user session context.",
+  "rem": [
+   [
+    "Deploy a Conditional Access policy to block authentication transfer",
+    "https://learn.microsoft.com/entra/identity/conditional-access/policy-block-authentication-flows?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci#authentication-transfer-policies"
+   ]
+  ]
+ },
+ "ZTA-031": {
+  "ztId": "21824",
+  "approx": false,
+  "bg": "Guest accounts with extended sign-in sessions increase the risk surface area that threat actors can exploit. When guest sessions persist beyond necessary timeframes, threat actors often attempt to gain initial access through credential stuffing, password spraying, or social engineering attacks. Once they gain access, they can maintain unauthorized access for extended periods without reauthentication challenges. These compromised and extended sessions:\n\n- Allow unauthorized access to Microsoft Entra artifacts, enabling threat actors to identify sensitive resources and map organizational structures.\n- Allow threat actors to persist within the network by using legitimate authentication tokens, making detection more challenging as the activity appears as typical user behavior.\n- Provides threat actors with a longer window of time to escalate privileges through techniques like accessing shared resources, discovering more credentials, or exploiting trust relationships between systems.\n\nWithout proper session controls, threat actors can achieve lateral movement across the organization's infrastructure, accessing critical data and systems that extend far beyond the original guest account's intended scope of access.",
+  "rem": [
+   [
+    "Configure adaptive session lifetime policies",
+    "https://learn.microsoft.com/entra/identity/conditional-access/howto-conditional-access-session-lifetime?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ]
+  ]
+ },
+ "ZTA-032": {
+  "ztId": "21875",
+  "approx": false,
+  "bg": "Access packages configured to allow \"All users\" instead of specific connected organizations expose your organization to uncontrolled external access. Threat actors can exploit this by requesting access through compromised external accounts from unauthorized organizations, bypassing the principle of least privilege. This enables initial access, reconnaissance, privilege escalation, and lateral movement within your environment.",
+  "rem": [
+   [
+    "Define trusted organizations as connected organizations",
+    "https://learn.microsoft.com/entra/id-governance/entitlement-management-organization?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci#view-the-list-of-connected-organizations"
+   ],
+   [
+    "Configure access packages to only allow specific connected organizations",
+    "https://learn.microsoft.com/entra/id-governance/entitlement-management-access-package-create?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci#allow-users-not-in-your-directory-to-request-the-access-package"
+   ]
+  ]
+ },
+ "ZTA-033": {
+  "ztId": "24802",
+  "approx": true,
+  "bg": "If device cleanup rules aren't configured in Intune, stale or inactive devices can remain visible in the tenant indefinitely. This leads to cluttered device lists, inaccurate reporting, and reduced visibility into the active device landscape. Unused devices might retain access credentials or tokens, increasing the risk of unauthorized access or misinformed policy decisions. \n\nDevice cleanup rules automatically hide inactive devices from admin views and reports, improving tenant hygiene and reducing administrative burden. This supports Zero Trust by maintaining an accurate and trustworthy device inventory while preserving historical data for audit or investigation.",
+  "rem": [
+   [
+    "Create a device cleanup rule",
+    "https://learn.microsoft.com/intune/governance/configure-cleanup-rules?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci#how-to-create-a-device-cleanup-rule"
+   ],
+   [
+    "Using Intune device cleanup rules",
+    "https://techcommunity.microsoft.com/blog/devicemanagementmicrosoft/using-intune-device-cleanup-rules-updated-version/3760854"
+   ]
+  ]
+ },
+ "ZTA-034": {
+  "ztId": "21845",
+  "approx": false,
+  "bg": "Without Temporary Access Pass (TAP) enabled, organizations face significant challenges in securely bootstrapping user credentials, creating a vulnerability where users rely on weaker authentication mechanisms during their initial setup. When users cannot register phishing-resistant credentials like FIDO2 security keys or Windows Hello for Business due to lack of existing strong authentication methods, they remain exposed to credential-based attacks including phishing, password spray, or similar attacks. Threat actors can exploit this registration gap by targeting users during their most vulnerable state, when they have limited authentication options available and must rely on traditional username + password combinations. This exposure enables threat actors to compromise user accounts during the critical bootstrapping phase, allowing them to intercept or manipulate the registration process for stronger authentication methods, ultimately gaining persistent access to organizational resources and potentially escalating privileges before security controls are fully established. \n\nEnable TAP and use it with security info registration to secure this potential gap in your defenses.",
+  "rem": [
+   [
+    "Learn how to enable Temporary Access Pass in the Authentication methods policy",
+    "https://learn.microsoft.com/entra/identity/authentication/howto-authentication-temporary-access-pass?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci#enable-the-temporary-access-pass-policy"
+   ],
+   [
+    "Learn how to update authentication strength policies to include Temporary Access Pass",
+    "https://learn.microsoft.com/entra/identity/authentication/concept-authentication-strength-advanced-options?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ],
+   [
+    "Learn how to create a Conditional Access policy for security info registration with authentication strength enforcement",
+    "https://learn.microsoft.com/entra/identity/conditional-access/policy-all-users-security-info-registration?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ]
+  ]
+ },
+ "ZTA-035": {
+  "ztId": "21885",
+  "approx": false,
+  "bg": "OAuth applications configured with URLs that include wildcards, or URL shorteners increase the attack surface for threat actors. Insecure redirect URIs (reply URLs) might allow adversaries to manipulate authentication requests, hijack authorization codes, and intercept tokens by directing users to attacker-controlled endpoints. Wildcard entries expand the risk by permitting unintended domains to process authentication responses, while shortener URLs might facilitate phishing and token theft in uncontrolled environments. \n\nWithout strict validation of redirect URIs, attackers can bypass security controls, impersonate legitimate applications, and escalate their privileges. This misconfiguration enables persistence, unauthorized access, and lateral movement, as adversaries exploit weak OAuth enforcement to infiltrate protected resources undetected.",
+  "rem": [
+   [
+    "Check the redirect URIs for your application registrations.",
+    "https://learn.microsoft.com/entra/identity-platform/reply-url?wt.mc_id=zerotrustrecommendations_automation_content_cnl_csasci"
+   ]
+  ]
+ },
  "ZTA-101": {
   "ztId": "24541",
   "approx": true,

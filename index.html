@@ -203,8 +203,8 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
       <h1>Run the assessment</h1>
       <p class="mini" style="margin-bottom:4px">v1 subset — Identity baseline + Intune basics. Permissions are delegated and read-only.</p>
       <div class="pillar-grid">
-        <label class="pillar-opt sel"><input type="checkbox" id="pIdentity" checked><span><b>🪪 Identity</b> <span class="mini">25 checks · CA, auth methods, apps &amp; consent, roles, PIM, guests</span></span></label>
-        <label class="pillar-opt"><input type="checkbox" id="pDevices"><span><b>💻 Devices</b> <span class="mini">1 check · Intune compliance coverage (asks for Intune read scope)</span></span></label>
+        <label class="pillar-opt sel"><input type="checkbox" id="pIdentity" checked><span><b>🪪 Identity</b> <span class="mini">34 checks · CA, auth flows, methods, apps, consent, roles, PIM, guests, cross-tenant</span></span></label>
+        <label class="pillar-opt"><input type="checkbox" id="pDevices"><span><b>💻 Devices</b> <span class="mini">2 checks · Intune compliance coverage, stale devices</span></span></label>
       </div>
       <div class="scopebox" id="scopeBox"></div>
       <button class="btn primary ms-btn" id="startBtn">▶ Start assessment</button>
@@ -365,8 +365,8 @@ const CONFIG = {
   spScope: 'Sites.ReadWrite.All',
   pimScope: 'RoleManagement.Read.Directory',   // PIM eligibility check, optional (403 → skip)
   reportScope: 'AuditLog.Read.All',            // MFA registration report, optional (403 → skip)
-  version: '0.3',
-  build: '2026.08.03-8'          // bump on every deploy — shown on sign-in + footer, à la ENCA
+  version: '0.4',
+  build: '2026.08.03-9'          // bump on every deploy — shown on sign-in + footer, à la ENCA
 };
 
 /* ================= CHECKS (pure, testable) ================= */
@@ -593,6 +593,87 @@ const CHECKS = [
     return pct>=95 ? {status:'pass', detail:`${pct}% of ${total} users are MFA-capable.`}
       : {status:'fail', detail:`Only ${pct}% of ${total} users are MFA-capable (target ≥95%).`}; } },
 
+
+{ id:'ZTA-026', title:'SMS and voice-call authentication methods are disabled', pillar:'Identity', risk:'Medium', sfi:'Protect identities and secrets',
+  why:'Phone-based MFA is vulnerable to SIM-swap and social engineering.',
+  rem:['Disable Sms and Voice in the authentication methods policy once users have Authenticator or passkeys.'],
+  run(D){ const cfg=D.authMethods?.authenticationMethodConfigurations||[];
+    const on=cfg.filter(c=>['Sms','Voice'].includes(c.id)&&c.state==='enabled').map(c=>c.id);
+    return on.length ? {status:'fail', detail:`Enabled phone-based methods: ${on.join(', ')}.`}
+      : {status:'pass', detail:'SMS and voice call methods are disabled.'}; } },
+
+{ id:'ZTA-027', title:'MFA registration page is protected by Conditional Access', pillar:'Identity', risk:'High', sfi:'Protect identities and secrets',
+  why:'An attacker with a password can otherwise register their own MFA method on My Security Info.',
+  rem:["Create a CA policy on the user action 'Register security information' requiring trusted location or MFA/TAP."],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&(p.conditions?.applications?.includeUserActions||[]).includes('urn:user:registersecurityinfo'));
+    return pol.length ? {status:'pass', detail:`Protected by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'fail', detail:'No CA policy targets the security-information registration user action.'}; } },
+
+{ id:'ZTA-028', title:'Device join and registration require MFA', pillar:'Identity', risk:'Medium', sfi:'Protect tenants and isolate production systems',
+  why:'Unprotected device registration lets an attacker enroll a device to satisfy device-based CA.',
+  rem:["Create a CA policy on the user action 'Register or join devices' requiring MFA (skip if Intune enrollment already enforces it)."],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&(p.conditions?.applications?.includeUserActions||[]).includes('urn:user:registerdevice'));
+    return pol.length ? {status:'pass', detail:`Enforced by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'inv', detail:'No CA policy targets the device-registration user action (acceptable if enforced via Intune enrollment).'}; } },
+
+{ id:'ZTA-029', title:'Device code flow is blocked or restricted', pillar:'Identity', risk:'High', sfi:'Protect identities and secrets',
+  why:'Device code phishing is a common initial-access technique that bypasses many CA controls.',
+  rem:['Create a CA policy: authentication flows condition → device code flow → block (exclude the few legitimate scenarios).'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.hasBlock(p)&&(p.conditions?.authenticationFlows?.transferMethods||'').includes('deviceCodeFlow'));
+    return pol.length ? {status:'pass', detail:`Blocked by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'fail', detail:'No CA policy blocks the device code authentication flow.'}; } },
+
+{ id:'ZTA-030', title:'Authentication transfer is blocked', pillar:'Identity', risk:'Medium', sfi:'Protect identities and secrets',
+  why:'Authentication transfer moves a session to another device via QR code — a token-theft vector.',
+  rem:['Extend the authentication-flows CA policy to block authenticationTransfer.'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.hasBlock(p)&&(p.conditions?.authenticationFlows?.transferMethods||'').includes('authenticationTransfer'));
+    return pol.length ? {status:'pass', detail:`Blocked by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'inv', detail:'No CA policy blocks authentication transfer.'}; } },
+
+{ id:'ZTA-031', title:"Guests don't have long-lived sign-in sessions", pillar:'Identity', risk:'Medium', sfi:'Protect tenants and isolate production systems',
+  why:'A compromised guest session should expire quickly — you control neither the home tenant nor its hygiene.',
+  rem:['Add sign-in frequency (e.g. 12 hours) to a guest-targeted CA policy.'],
+  run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&p.sessionControls?.signInFrequency?.isEnabled&&(((p.conditions?.users?.includeUsers)||[]).includes('GuestsOrExternalUsers')||p.conditions?.users?.includeGuestsOrExternalUsers));
+    return pol.length ? {status:'pass', detail:`Enforced by: ${pol.map(p=>p.displayName).join(', ')}`}
+      : {status:'inv', detail:'No guest-targeted policy sets a sign-in frequency.'}; } },
+
+{ id:'ZTA-032', title:'Inbound guest collaboration is restricted to approved tenants', pillar:'Identity', risk:'Medium', sfi:'Protect tenants and isolate production systems',
+  why:'Default cross-tenant settings accept guests from any Entra tenant in the world.',
+  rem:['In cross-tenant access settings, set inbound B2B collaboration to blocked by default and allow named partner tenants.'],
+  run(D){ if(!D.crossTenant) return {status:'inv', detail:'Could not read the cross-tenant access policy.'};
+    const acc=D.crossTenant?.b2bCollaborationInbound?.usersAndGroups?.accessType;
+    return acc==='blocked' ? {status:'pass', detail:'Default inbound B2B collaboration is blocked — only allowed partner tenants can send guests.'}
+      : {status:'inv', detail:`Default inbound B2B collaboration is ${acc||'allowed'} — any tenant can be a guest source. Restrict if the business allows.`}; } },
+
+{ id:'ZTA-034', title:'Temporary Access Pass is enabled for passwordless onboarding', pillar:'Identity', risk:'Low', sfi:'Protect identities and secrets',
+  why:'TAP is the sanctioned bootstrap for passkeys — without it, onboarding falls back to weaker methods.',
+  rem:['Enable Temporary Access Pass (one-time use, short lifetime) in the authentication methods policy.'],
+  run(D){ const cfg=(D.authMethods?.authenticationMethodConfigurations||[]).find(c=>c.id==='TemporaryAccessPass');
+    return cfg?.state==='enabled' ? {status:'pass', detail:'Temporary Access Pass is enabled.'}
+      : {status:'inv', detail:'Temporary Access Pass is disabled — passkey onboarding needs a bootstrap method.'}; } },
+
+{ id:'ZTA-035', title:'App registrations use safe redirect URIs', pillar:'Identity', risk:'High', sfi:'Protect engineering systems',
+  why:'http:// or wildcard redirect URIs let attackers intercept authorization codes and tokens.',
+  rem:['Replace http:// (non-localhost) and wildcard redirect URIs; remove unused URIs.'],
+  run(D){ if(!D.apps) return {status:'inv', detail:'Could not read applications.'};
+    const bad=[];
+    for(const a of D.apps){
+      const uris=[...(a.web?.redirectUris||[]),...(a.spa?.redirectUris||[]),...(a.publicClient?.redirectUris||[])];
+      for(const u of uris){
+        if(/^http:\/\//i.test(u)&&!/^http:\/\/(localhost|127\.0\.0\.1)/i.test(u)) bad.push([a.displayName,u,'insecure http']);
+        else if(u.includes('*')) bad.push([a.displayName,u,'wildcard']); } }
+    return bad.length ? {status:'fail', detail:`${bad.length} unsafe redirect URI(s) found.`, evidence:bad.slice(0,25)}
+      : {status:'pass', detail:'No insecure or wildcard redirect URIs on app registrations.'}; } },
+
+{ id:'ZTA-033', title:'No stale devices in the directory', pillar:'Devices', risk:'Medium', sfi:'Protect tenants and isolate production systems',
+  why:'Enabled device objects with no activity for months satisfy device-based CA while nobody watches them.',
+  rem:['Disable devices inactive for 90+ days, delete after 180; automate a cleanup cadence.'],
+  run(D){ if(D.devicesList===undefined) return {status:'skip', detail:'Devices pillar not selected.'};
+    const now=Date.now(), stale=(D.devicesList||[]).filter(d=>d.accountEnabled&&d.approximateLastSignInDateTime&&H.days(now-new Date(d.approximateLastSignInDateTime))>180);
+    const note=D.devicesList.partial?' (sample — large tenant)':'';
+    return stale.length ? {status:'fail', detail:`${stale.length} enabled device(s) inactive for over 180 days${note}.`, evidence:stale.slice(0,25).map(d=>[d.displayName||d.id,d.operatingSystem||'','last seen '+String(d.approximateLastSignInDateTime).slice(0,10)])}
+      : {status:'pass', detail:`No enabled devices inactive for over 180 days${note}.`}; } },
+
 { id:'ZTA-101', title:'Intune compliance policies cover the platforms in use', pillar:'Devices', risk:'High', sfi:'Protect tenants and isolate production systems', dataset:'compliance',
   why:'Device compliance is the anchor for device-based Conditional Access.',
   rem:['Create compliance policies for every managed platform and assign them.'],
@@ -606,7 +687,7 @@ function evaluateAll(D, log){
   const out=[];
   for(const c of CHECKS){
     let r; try { r=c.run(D); } catch(e){ r={status:'inv', detail:'Check errored: '+(e.message||e)}; }
-    out.push({id:c.id, title:c.title, pillar:c.pillar, risk:c.risk, license:c.license||null,
+    out.push({id:c.id, title:c.title, pillar:c.pillar, risk:c.risk, sfi:c.sfi||null, license:c.license||null,
               why:c.why, rem:c.rem, status:r.status, detail:r.detail, evidence:r.evidence||[]});
     if(log) log(`${r.status==='pass'?'✓':r.status==='fail'?'✗':'•'} ${c.id} ${c.title} — ${r.status}`, r.status==='fail'?'err':'ok');
   }
@@ -679,8 +760,8 @@ const DEMO = {
     {displayName:'Admin Three'},{displayName:'Admin Four'},{displayName:'Admin Five'},{displayName:'Admin Six'},
     {displayName:'Admin Seven'},{displayName:'Admin Eight'},{displayName:'Admin Nine'},{displayName:'Admin Ten'}],
   apps:[
-    {displayName:'HR-Sync-Legacy', passwordCredentials:[{startDateTime:'2023-01-01T00:00:00Z',endDateTime:'2033-01-01T00:00:00Z'}]},
-    {displayName:'Modern-App', passwordCredentials:[{startDateTime:'2026-01-01T00:00:00Z',endDateTime:'2026-12-31T00:00:00Z'}]}],
+    {displayName:'HR-Sync-Legacy', passwordCredentials:[{startDateTime:'2023-01-01T00:00:00Z',endDateTime:'2033-01-01T00:00:00Z'}], web:{redirectUris:['http://hr-legacy.contoso.nl/auth']}},
+    {displayName:'Modern-App', passwordCredentials:[{startDateTime:'2026-01-01T00:00:00Z',endDateTime:'2026-12-31T00:00:00Z'}], spa:{redirectUris:['https://app.contoso.nl']}}],
   domains:[{id:'contoso.nl',isVerified:true,passwordValidityPeriodInDays:90},{id:'contoso.onmicrosoft.com',isVerified:true,passwordValidityPeriodInDays:2147483647}],
   compliance:[{displayName:'Win10/11 baseline','@odata.type':'#microsoft.graph.windows10CompliancePolicy'},
               {displayName:'iOS baseline','@odata.type':'#microsoft.graph.iosCompliancePolicy'}],
@@ -691,6 +772,10 @@ const DEMO = {
   pimGA:[],
   regReport:{totalUserCount:1284, userRegistrationFeatureCounts:[{feature:'mfaCapable',userCount:1042}]},
   counts:{users:1284, guests:23, groups:214, devices:611},
+  crossTenant:{b2bCollaborationInbound:{usersAndGroups:{accessType:'allowed'}}},
+  devicesList:[
+    {displayName:'LAPTOP-OLD-01', accountEnabled:true, approximateLastSignInDateTime:'2025-11-02T00:00:00Z', operatingSystem:'Windows'},
+    {displayName:'LAPTOP-742', accountEnabled:true, approximateLastSignInDateTime:'2026-07-30T00:00:00Z', operatingSystem:'Windows'}],
   regDetails:[
     {methodsRegistered:['passKeyDeviceBound'], isMfaCapable:true},
     {methodsRegistered:['windowsHelloForBusiness','microsoftAuthenticatorPush'], isMfaCapable:true},
@@ -771,9 +856,9 @@ async function runAssessment(){
   try{
     if(DEMO_MODE){
       Object.assign(D, DEMO);
-      const steps=['users & organization','conditionalAccessPolicies (4)','authorizationPolicy','authenticationMethodsPolicy','namedLocations (2)','directoryRoles: Global Administrator (10)','applications (2)','domains (2)','adminConsentRequestPolicy','servicePrincipals (1)','guests (2)','PIM eligibility (0)','authMethods registration report','deviceCompliancePolicies (2)'];
+      const steps=['users & organization','conditionalAccessPolicies (4)','authorizationPolicy','authenticationMethodsPolicy','namedLocations (2)','directoryRoles: Global Administrator (10)','applications (2)','domains (2)','adminConsentRequestPolicy','servicePrincipals (1)','guests (2)','PIM eligibility (0)','authMethods registration report','crossTenantAccessPolicy','devices (2)','deviceCompliancePolicies (2)'];
       for(let i=0;i<steps.length;i++){ log('✓ dataset '+steps[i],'ok'); prog(Math.round((i+1)/steps.length*60),'Fetching datasets…'); await new Promise(x=>setTimeout(x,240)); }
-      if(!$('pDevices').checked) delete D.compliance;
+      if(!$('pDevices').checked){ delete D.compliance; delete D.devicesList; }
     } else {
       const sets=[
         ['org', ()=>graphGET('/organization')],
@@ -783,7 +868,8 @@ async function runAssessment(){
         ['namedLocations', ()=>graphGET('/identity/conditionalAccess/namedLocations')],
         ['secDefaults', ()=>graphGET('/policies/identitySecurityDefaultsEnforcementPolicy')],
         ['gaMembers', ()=>graphGET("/directoryRoles(roleTemplateId='62e90394-69f5-4237-9190-012177145e10')/members?$select=id,displayName,userPrincipalName").catch(e=>e.status===404?[]:Promise.reject(e))],
-        ['apps', ()=>graphGET('/applications?$select=id,displayName,passwordCredentials&$top=999')],
+        ['apps', ()=>graphGET('/applications?$select=id,displayName,passwordCredentials,web,spa,publicClient&$top=999')],
+        ['crossTenant', ()=>graphGET('/policies/crossTenantAccessPolicy/default')],
         ['domains', ()=>graphGET('/domains')],
         ['adminConsent', ()=>graphGET('/policies/adminConsentRequestPolicy')],
         ['sps', ()=>graphGET('/servicePrincipals?$select=id,displayName,passwordCredentials&$top=999',null,{maxPages:10})],
@@ -800,7 +886,8 @@ async function runAssessment(){
           return { users:await c('/users/$count'), guests:await c("/users/$count?$filter=userType eq 'Guest'"),
                    groups:await c('/groups/$count'), devices:await c('/devices/$count') }; }]
       ];
-      if($('pDevices').checked) sets.push(['compliance', ()=>graphGET('/deviceManagement/deviceCompliancePolicies',[...CONFIG.baseScopes,CONFIG.intuneScope])]);
+      if($('pDevices').checked){ sets.push(['compliance', ()=>graphGET('/deviceManagement/deviceCompliancePolicies',[...CONFIG.baseScopes,CONFIG.intuneScope])]);
+        sets.push(['devicesList', ()=>graphGET('/devices?$select=id,displayName,approximateLastSignInDateTime,accountEnabled,operatingSystem&$top=999',null,{maxPages:5})]); }
       for(let i=0;i<sets.length;i++){
         const [k,fn]=sets[i]; prog(Math.round(i/sets.length*60),'Fetching '+k+'…');
         try{ D[k]=await fn(); log(`✓ dataset ${k}${Array.isArray(D[k])?' ('+D[k].length+')':''}`,'ok'); }
