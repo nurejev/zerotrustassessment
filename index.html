@@ -351,7 +351,7 @@ const CONFIG = {
   pimScope: 'RoleManagement.Read.Directory',   // PIM eligibility check, optional (403 → skip)
   reportScope: 'AuditLog.Read.All',            // MFA registration report, optional (403 → skip)
   version: '0.3',
-  build: '2026.08.03-4'          // bump on every deploy — shown on sign-in + footer, à la ENCA
+  build: '2026.08.03-5'          // bump on every deploy — shown on sign-in + footer, à la ENCA
 };
 
 /* ================= CHECKS (pure, testable) ================= */
@@ -1054,7 +1054,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   updateScopeBox();
   $('signInBtn').onclick=async()=>{
     try{ await ensureMsal();
-      const r=await msalApp.loginPopup({scopes:CONFIG.baseScopes});
+      // full scope set at sign-in → one consent covers every check, the sankeys and SharePoint save
+      const r=await msalApp.loginPopup({scopes:[...CONFIG.baseScopes,CONFIG.intuneScope,CONFIG.pimScope,CONFIG.reportScope,CONFIG.spScope]});
       account=r.account; DEMO_MODE=false;
       $('tenantName').textContent=account.tenantId; $('tenantUser').textContent=account.username;
       $('avatar').textContent=(account.name||account.username||'?').slice(0,2).toUpperCase();
