@@ -341,6 +341,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
   </div>
 </div>
 
+<script src="js/checkDocs.js?v=7"></script>
 <script>
 'use strict';
 /* ================= CONFIG =================
@@ -355,7 +356,7 @@ const CONFIG = {
   pimScope: 'RoleManagement.Read.Directory',   // PIM eligibility check, optional (403 → skip)
   reportScope: 'AuditLog.Read.All',            // MFA registration report, optional (403 → skip)
   version: '0.3',
-  build: '2026.08.03-6'          // bump on every deploy — shown on sign-in + footer, à la ENCA
+  build: '2026.08.03-7'          // bump on every deploy — shown on sign-in + footer, à la ENCA
 };
 
 /* ================= CHECKS (pure, testable) ================= */
@@ -935,14 +936,36 @@ function renderRows(){
         <td><span class="state ${SL[c.status][0]}">${SL[c.status][1]}</span></td>`;
       tr.onclick=()=>openDrawer(c); tb.appendChild(tr);});
 }
+function mdToHtml(md){
+  // minimal renderer for the upstream doc markdown: paragraphs, bullets, bold, links
+  const inline=s=>esc(s)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
+  return md.split(/\n\s*\n/).map(blk=>{
+    const lines=blk.split('\n');
+    if(lines.every(l=>/^\s*[-*] /.test(l)||!l.trim()))
+      return '<ul>'+lines.filter(l=>l.trim()).map(l=>'<li>'+inline(l.replace(/^\s*[-*] /,''))+'</li>').join('')+'</ul>';
+    if(/^#+ /.test(blk)) return '<h4>'+inline(blk.replace(/^#+ /,''))+'</h4>';
+    return '<p>'+inline(blk)+'</p>';
+  }).join('');
+}
 function openDrawer(c){
+  const doc=(window.CHECK_DOCS||{})[c.id];
   $('dTitle').textContent=c.title;
   $('dChips').innerHTML=`<span class="state ${SL[c.status][0]}">${SL[c.status][1]}</span>
     <span class="risk ${c.risk}">Risk: ${c.risk}</span><span class="chip">Pillar: ${c.pillar}</span>
-    <span class="chip">${c.id}</span>${c.license?`<span class="chip">License: ${c.license}</span>`:''}`;
-  let h=`<h4>Result</h4><p>${esc(c.detail||'')}</p><h4>Why it matters</h4><p>${esc(c.why||'')}</p>`;
+    <span class="chip">${c.id}</span>${doc?`<span class="chip">Microsoft ZT-${doc.ztId}${doc.approx?' (related)':''}</span>`:''}
+    ${c.license?`<span class="chip">License: ${c.license}</span>`:''}`;
+  let h=`<h4>Result</h4><p>${esc(c.detail||'')}</p>`;
   if(c.evidence?.length){ h+=`<h4>Evidence</h4><table class="evi"><tr><th>Item</th><th>Detail</th><th>Note</th></tr>`+
     c.evidence.map(r=>`<tr>${r.map(x=>`<td>${esc(String(x??''))}</td>`).join('')}</tr>`).join('')+`</table>`; }
+  if(doc){
+    h+=`<h4>What was checked</h4>${doc.approx?`<p class="mini">Background from the related Microsoft check ZT-${doc.ztId}.</p>`:''}${mdToHtml(doc.bg)}`;
+    if(doc.rem.length) h+=`<h4>Remediation (Microsoft docs)</h4><ul>`+
+      doc.rem.map(([t,u])=>`<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a></li>`).join('')+`</ul>`;
+  } else {
+    h+=`<h4>Why it matters</h4><p>${esc(c.why||'')}</p>`;
+  }
   if(c.rem?.length){ h+=`<h4>Recommended actions</h4><ul>`+c.rem.map(r=>`<li>${esc(r)}</li>`).join('')+`</ul>`; }
   $('dBody').innerHTML=h; $('ovl').classList.add('show'); $('drawer').classList.add('show');
 }
