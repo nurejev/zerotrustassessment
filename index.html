@@ -272,16 +272,26 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 26px;font-size:12px;color:v
   </div><!-- /ovDash -->
 
   <div id="checksView" style="display:none">
+  <div class="panel" id="pillarIntro" style="margin-bottom:14px;padding:14px 18px"></div>
   <div class="toolbar">
     <div class="search">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" placeholder="Search checks…">
     </div>
+    <span class="mini" style="font-weight:600">Risk:</span>
+    <span class="fchip" data-risk="High">High</span>
+    <span class="fchip" data-risk="Medium">Medium</span>
+    <span class="fchip" data-risk="Low">Low</span>
+    <span class="mini" style="font-weight:600">Status:</span>
     <span class="fchip active" data-st="all">All</span>
     <span class="fchip" data-st="fail">Failed</span>
     <span class="fchip" data-st="inv">Investigate</span>
     <span class="fchip" data-st="pass">Passed</span>
     <span class="fchip" data-st="skip">Skipped</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 10px">
+    <span class="mini" style="font-weight:600">SFI pillar:</span><span id="sfiChips" style="display:contents"></span>
+    <span class="mini" id="showCount" style="margin-left:auto"></span>
   </div>
 
   <div class="list-card">
@@ -356,7 +366,7 @@ const CONFIG = {
   pimScope: 'RoleManagement.Read.Directory',   // PIM eligibility check, optional (403 → skip)
   reportScope: 'AuditLog.Read.All',            // MFA registration report, optional (403 → skip)
   version: '0.3',
-  build: '2026.08.03-7'          // bump on every deploy — shown on sign-in + footer, à la ENCA
+  build: '2026.08.03-8'          // bump on every deploy — shown on sign-in + footer, à la ENCA
 };
 
 /* ================= CHECKS (pure, testable) ================= */
@@ -374,7 +384,7 @@ const PHISH_RESISTANT_ID = '00000000-0000-0000-0000-000000000004';
 const GUEST_RESTRICTED_ID = '2af84b1e-32c8-42b7-82bc-daa82404023b';
 
 const CHECKS = [
-{ id:'ZTA-001', title:'Tenant is protected by Conditional Access or security defaults', pillar:'Identity', risk:'High',
+{ id:'ZTA-001', title:'Tenant is protected by Conditional Access or security defaults', pillar:'Identity', risk:'High', sfi:'Protect identities and secrets',
   why:'Without either, sign-ins are not challenged at all.',
   rem:['Enable Conditional Access baseline policies (or security defaults on small tenants).'],
   run(D){ const ca=(D.ca||[]).filter(H.enabled);
@@ -382,7 +392,7 @@ const CHECKS = [
     if(D.secDefaults?.isEnabled) return {status:'pass', detail:'Security defaults are enabled (no CA policies).'};
     return {status:'fail', detail:'No enabled CA policies and security defaults are off.'}; } },
 
-{ id:'ZTA-002', title:'Legacy authentication is blocked', pillar:'Identity', risk:'High',
+{ id:'ZTA-002', title:'Legacy authentication is blocked', pillar:'Identity', risk:'High', sfi:'Protect identities and secrets',
   why:'Legacy protocols (POP/IMAP/SMTP basic, EAS) bypass MFA entirely.',
   rem:['Create a CA policy blocking clientAppTypes exchangeActiveSync + other for all users.','Check sign-in logs for remaining legacy auth before enforcing.'],
   run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.hasBlock(p)&&H.legacyClients(p));
@@ -392,14 +402,14 @@ const CHECKS = [
       ? {status:'inv', detail:'Legacy auth is blocked, but not for All users.', evidence:pol.map(p=>[p.displayName,'scope: not All users',''])}
       : {status:'pass', detail:`Blocked for all users by: ${pol.filter(H.targetsAllUsers).map(p=>p.displayName).join(', ')}`}; } },
 
-{ id:'ZTA-003', title:'MFA is required for all users', pillar:'Identity', risk:'High',
+{ id:'ZTA-003', title:'MFA is required for all users', pillar:'Identity', risk:'High', sfi:'Monitor and detect cyberthreats',
   why:'MFA stops the vast majority of credential-based attacks.',
   rem:['Create a CA policy: All users → all cloud apps → require MFA (or an authentication strength).'],
   run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsAllUsers(p)&&H.hasMfa(p));
     return pol.length ? {status:'pass', detail:`Enforced by: ${pol.map(p=>p.displayName).join(', ')}`}
       : {status:'fail', detail:'No enabled CA policy requires MFA for All users.'}; } },
 
-{ id:'ZTA-004', title:'MFA is required for administrative roles', pillar:'Identity', risk:'High',
+{ id:'ZTA-004', title:'MFA is required for administrative roles', pillar:'Identity', risk:'High', sfi:'Protect identities and secrets',
   why:'Admin accounts are the highest-value target.',
   rem:['Create a CA policy targeting directory roles with MFA or an authentication strength.'],
   run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsRoles(p)&&H.hasMfa(p));
@@ -408,14 +418,14 @@ const CHECKS = [
     return all ? {status:'inv', detail:'Covered only via the all-users MFA policy — a dedicated admin policy (stronger controls, no exclusions) is recommended.'}
                : {status:'fail', detail:'No CA policy requires MFA for administrative roles.'}; } },
 
-{ id:'ZTA-005', title:'Privileged roles require phishing-resistant authentication', pillar:'Identity', risk:'High',
+{ id:'ZTA-005', title:'Privileged roles require phishing-resistant authentication', pillar:'Identity', risk:'High', sfi:'Protect identities and secrets',
   why:'OTP/push MFA is phishable; FIDO2/passkeys are not.',
   rem:['Create a CA policy: directory roles → authentication strength "Phishing-resistant MFA".','Register passkeys for all admins first; roll out report-only.'],
   run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsRoles(p)&&p.grantControls?.authenticationStrength?.id===PHISH_RESISTANT_ID);
     return pol.length ? {status:'pass', detail:`Enforced by: ${pol.map(p=>p.displayName).join(', ')}`}
       : {status:'fail', detail:'No policy enforces phishing-resistant authentication strength for privileged roles.'}; } },
 
-{ id:'ZTA-006', title:'Risk-based Conditional Access policies exist', pillar:'Identity', risk:'Medium', license:'Entra ID P2',
+{ id:'ZTA-006', title:'Risk-based Conditional Access policies exist', pillar:'Identity', risk:'Medium', sfi:'Accelerate response and remediation', license:'Entra ID P2',
   why:'Identity Protection risk signals should trigger step-up or block.',
   rem:['Add policies for high sign-in risk (require MFA / block) and high user risk (require password change).'],
   run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&((p.conditions?.signInRiskLevels||[]).length||(p.conditions?.userRiskLevels||[]).length));
@@ -423,7 +433,7 @@ const CHECKS = [
     return D.hasP2===false ? {status:'skip', detail:'No Entra ID P2 detected — risk-based CA is not licensed.'}
       : {status:'fail', detail:'No enabled CA policy uses sign-in or user risk conditions.'}; } },
 
-{ id:'ZTA-007', title:'Strict all-user policies have emergency-access exclusions', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-007', title:'Strict all-user policies have emergency-access exclusions', pillar:'Identity', risk:'Medium', sfi:'Protect engineering systems',
   why:'A block/MFA policy for All users without any exclusion can lock the whole tenant out.',
   rem:['Exclude the break-glass accounts (cloud-only, passkey-protected, monitored) from every strict policy.'],
   run(D){ const strict=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsAllUsers(p)&&(H.hasBlock(p)||H.hasMfa(p)));
@@ -432,21 +442,21 @@ const CHECKS = [
     return bad.length ? {status:'inv', detail:`${bad.length} strict polic${bad.length>1?'ies have':'y has'} no exclusions at all.`, evidence:bad.map(p=>[p.displayName,'no excluded users/groups','verify break-glass coverage'])}
       : {status:'pass', detail:'Every strict all-user policy has at least one exclusion (verify these are the break-glass accounts).'}; } },
 
-{ id:'ZTA-008', title:'User consent to applications is restricted', pillar:'Identity', risk:'High',
+{ id:'ZTA-008', title:'User consent to applications is restricted', pillar:'Identity', risk:'High', sfi:'Protect identities and secrets',
   why:'Unrestricted user consent enables illicit-consent-grant phishing.',
   rem:['Allow user consent only for verified publishers / low-risk permissions, or disable and use the admin consent workflow.'],
   run(D){ const g=D.authz?.defaultUserRolePermissions?.permissionGrantPoliciesAssigned||[];
     if(g.some(x=>x.includes('microsoft-user-default-legacy'))) return {status:'fail', detail:'Users may consent to any app for any permission (legacy default).'};
     return {status:'pass', detail: g.length? `Consent limited by policy: ${g.join(', ')}` : 'User consent is disabled.'}; } },
 
-{ id:'ZTA-009', title:'Users cannot register applications', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-009', title:'Users cannot register applications', pillar:'Identity', risk:'Medium', sfi:'Protect engineering systems',
   why:'User-created app registrations are a common persistence and phishing vehicle.',
   rem:['Set "Users can register applications" to No; use the admin consent workflow for legitimate needs.'],
   run(D){ return D.authz?.defaultUserRolePermissions?.allowedToCreateApps
     ? {status:'fail', detail:'Any user can register applications.'}
     : {status:'pass', detail:'Application registration is limited to admins.'}; } },
 
-{ id:'ZTA-010', title:'Guest invitations are restricted', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-010', title:'Guest invitations are restricted', pillar:'Identity', risk:'Medium', sfi:'Protect tenants and isolate production systems',
   why:'Everyone-can-invite means uncontrolled external access growth.',
   rem:["Set guest invite settings to 'adminsAndGuestInviters' or stricter."],
   run(D){ const v=D.authz?.allowInvitesFrom;
@@ -454,14 +464,14 @@ const CHECKS = [
       ? {status:'pass', detail:`allowInvitesFrom = ${v}`}
       : {status:'fail', detail:`allowInvitesFrom = ${v||'everyone'} — any user (or even guests) can invite.`}; } },
 
-{ id:'ZTA-011', title:'Guest user access is restricted', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-011', title:'Guest user access is restricted', pillar:'Identity', risk:'Medium', sfi:'Protect tenants and isolate production systems',
   why:'Default guest permissions expose directory enumeration.',
   rem:["Set guest user access to 'restricted' (guests can only see their own objects)."],
   run(D){ return D.authz?.guestUserRoleId===GUEST_RESTRICTED_ID
     ? {status:'pass', detail:'Guest access level: restricted.'}
     : {status:'inv', detail:'Guests have default (limited) directory access — consider the restricted level.'}; } },
 
-{ id:'ZTA-012', title:'Between 2 and 8 Global Administrators', pillar:'Identity', risk:'High',
+{ id:'ZTA-012', title:'Between 2 and 8 Global Administrators', pillar:'Identity', risk:'High', sfi:'Protect engineering systems',
   why:'One GA is an availability risk; many GAs are an attack surface.',
   rem:['Use PIM for eligible (not permanent) assignments; delegate with lesser roles.'],
   run(D){ const n=(D.gaMembers||[]).length;
@@ -470,7 +480,7 @@ const CHECKS = [
     if(n>8)  return {status:'fail', detail:`${n} Global Administrators — too many.`, evidence:(D.gaMembers||[]).map(m=>[m.displayName||m.userPrincipalName||m.id,'Global Administrator',''])};
     return {status:'pass', detail:`${n} Global Administrators.`}; } },
 
-{ id:'ZTA-013', title:'Application credentials are short-lived', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-013', title:'Application credentials are short-lived', pillar:'Identity', risk:'Medium', sfi:'Protect identities and secrets',
   why:'Long-lived client secrets are durable stolen credentials.',
   rem:['Replace secrets valid >2 years; prefer certificates or managed identities; rotate on a schedule.'],
   run(D){ const bad=[];
@@ -480,7 +490,7 @@ const CHECKS = [
     return bad.length ? {status:'fail', detail:`${bad.length} app secret(s) with a lifetime over 2 years.`, evidence:bad}
       : {status:'pass', detail:'No application secrets with a lifetime over 2 years.'}; } },
 
-{ id:'ZTA-014', title:'Phishing-resistant methods are enabled in the tenant', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-014', title:'Phishing-resistant methods are enabled in the tenant', pillar:'Identity', risk:'Medium', sfi:'Protect identities and secrets',
   why:'FIDO2/passkeys must be enabled before they can be required.',
   rem:['Enable FIDO2 security keys / passkeys in the authentication methods policy.'],
   run(D){ const cfg=D.authMethods?.authenticationMethodConfigurations||[];
@@ -488,7 +498,7 @@ const CHECKS = [
     return on.length ? {status:'pass', detail:`Enabled: ${on.join(', ')}`}
       : {status:'fail', detail:'Neither FIDO2/passkeys nor certificate-based auth is enabled.'}; } },
 
-{ id:'ZTA-015', title:'Named locations are defined and used', pillar:'Identity', risk:'Low',
+{ id:'ZTA-015', title:'Named locations are defined and used', pillar:'Identity', risk:'Low', sfi:'Protect networks',
   why:'Location context strengthens CA decisions (and enables travel-impossible detections).',
   rem:['Define trusted named locations and reference them in CA policies.'],
   run(D){ const n=(D.namedLocations||[]).length;
@@ -497,7 +507,7 @@ const CHECKS = [
     return used ? {status:'pass', detail:`${n} named locations, referenced by CA policies.`}
       : {status:'inv', detail:`${n} named locations exist but no CA policy references them.`}; } },
 
-{ id:'ZTA-016', title:'Password expiration is disabled', pillar:'Identity', risk:'Low',
+{ id:'ZTA-016', title:'Password expiration is disabled', pillar:'Identity', risk:'Low', sfi:'Protect identities and secrets',
   why:'Forced rotation produces weaker, patterned passwords (NIST/Microsoft guidance).',
   rem:['Set password validity to never expire; invest in MFA + banned-password protection instead.'],
   run(D){ const doms=(D.domains||[]).filter(d=>d.isVerified!==false);
@@ -505,14 +515,14 @@ const CHECKS = [
     return rot.length ? {status:'inv', detail:`${rot.length} domain(s) still expire passwords.`, evidence:rot.map(d=>[d.id,`validity ${d.passwordValidityPeriodInDays} d`,''])}
       : {status:'pass', detail:'Passwords are set to never expire.'}; } },
 
-{ id:'ZTA-017', title:'Admin consent workflow is enabled', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-017', title:'Admin consent workflow is enabled', pillar:'Identity', risk:'Medium', sfi:'Protect identities and secrets',
   why:'Without a request path, blocked user consent turns into shadow-IT pressure or admins consenting ad hoc.',
   rem:['Enable the admin consent workflow with named reviewers and expiry.'],
   run(D){ if(D.adminConsent===undefined) return {status:'inv', detail:'Could not read the admin consent request policy.'};
     return D.adminConsent?.isEnabled ? {status:'pass', detail:'Admin consent workflow is enabled.'}
       : {status:'fail', detail:'Admin consent workflow is disabled — users have no sanctioned path to request app approval.'}; } },
 
-{ id:'ZTA-018', title:'Workload identities have no long-lived secrets', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-018', title:'Workload identities have no long-lived secrets', pillar:'Identity', risk:'Medium', sfi:'Protect identities and secrets',
   why:'Service-principal secrets valid for years are durable stolen credentials.',
   rem:['Replace long-lived SP secrets with certificates, managed identities or federated credentials.'],
   run(D){ if(!D.sps) return {status:'inv', detail:'Could not read service principals.'};
@@ -523,7 +533,7 @@ const CHECKS = [
     return bad.length ? {status:'fail', detail:`${bad.length} service-principal secret(s) with a lifetime over 2 years.`, evidence:bad.slice(0,25)}
       : {status:'pass', detail:'No service-principal secrets with a lifetime over 2 years.'}; } },
 
-{ id:'ZTA-019', title:'Guest access requires MFA', pillar:'Identity', risk:'High',
+{ id:'ZTA-019', title:'Guest access requires MFA', pillar:'Identity', risk:'High', sfi:'Protect tenants and isolate production systems',
   why:'Guests authenticate in your tenant with their home credentials — MFA must still be enforced here.',
   rem:['Ensure guests are in scope of an MFA policy (dedicated guest policy or the all-users policy without guest exclusions).'],
   run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.hasMfa(p));
@@ -534,28 +544,28 @@ const CHECKS = [
     return allPol.length ? {status:'pass', detail:'Guests are covered via the all-users MFA policy (no guest exclusion found).'}
       : {status:'fail', detail:'No enabled MFA policy covers guest users.'}; } },
 
-{ id:'ZTA-020', title:'Device-based Conditional Access is in use', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-020', title:'Device-based Conditional Access is in use', pillar:'Identity', risk:'Medium', sfi:'Protect tenants and isolate production systems',
   why:'Requiring compliant or hybrid-joined devices ties access to device health.',
   rem:['Add a policy requiring a compliant device (or hybrid join) for sensitive apps or all users.'],
   run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&((p.grantControls?.builtInControls||[]).includes('compliantDevice')||(p.grantControls?.builtInControls||[]).includes('domainJoinedDevice')));
     return pol.length ? {status:'pass', detail:`Device controls enforced by: ${pol.map(p=>p.displayName).join(', ')}`}
       : {status:'fail', detail:'No enabled policy requires a compliant or hybrid-joined device.'}; } },
 
-{ id:'ZTA-021', title:'Sign-in frequency is controlled for privileged roles', pillar:'Identity', risk:'Low',
+{ id:'ZTA-021', title:'Sign-in frequency is controlled for privileged roles', pillar:'Identity', risk:'Low', sfi:'Protect identities and secrets',
   why:'Short session lifetimes for admins limit the value of a stolen token.',
   rem:['Add sign-in frequency (and disable persistent browser sessions) on the admin CA policy.'],
   run(D){ const pol=(D.ca||[]).filter(p=>H.enabled(p)&&H.targetsRoles(p)&&p.sessionControls?.signInFrequency?.isEnabled);
     return pol.length ? {status:'pass', detail:`Sign-in frequency set by: ${pol.map(p=>p.displayName).join(', ')}`}
       : {status:'inv', detail:'No role-targeted policy sets a sign-in frequency.'}; } },
 
-{ id:'ZTA-022', title:'No lingering report-only policies', pillar:'Identity', risk:'Low',
+{ id:'ZTA-022', title:'No lingering report-only policies', pillar:'Identity', risk:'Low', sfi:'Monitor and detect cyberthreats',
   why:'Report-only is a staging state — policies parked there protect nobody.',
   rem:['Review report-only policies: enable them or remove them.'],
   run(D){ const ro=(D.ca||[]).filter(p=>p.state==='enabledForReportingButNotEnforced');
     return ro.length ? {status:'inv', detail:`${ro.length} polic${ro.length>1?'ies are':'y is'} still report-only.`, evidence:ro.map(p=>[p.displayName,'report-only',String(p.modifiedDateTime||p.createdDateTime||'').slice(0,10)])}
       : {status:'pass', detail:'No report-only policies.'}; } },
 
-{ id:'ZTA-023', title:'No stale unredeemed guest invitations', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-023', title:'No stale unredeemed guest invitations', pillar:'Identity', risk:'Medium', sfi:'Protect tenants and isolate production systems',
   why:'Never-redeemed invitations are dormant access waiting to be hijacked.',
   rem:['Delete guests whose invitation is older than 90 days and never accepted; add an access-review cadence for guests.'],
   run(D){ if(!D.guests) return {status:'inv', detail:'Could not read guest users.'};
@@ -564,7 +574,7 @@ const CHECKS = [
     return stale.length ? {status:'fail', detail:`${stale.length} guest invitation(s) pending for over 90 days${note}.`, evidence:stale.slice(0,25).map(g=>[g.displayName||g.id,'PendingAcceptance','invited '+String(g.createdDateTime).slice(0,10)])}
       : {status:'pass', detail:`No unredeemed guest invitations older than 90 days${note}.`}; } },
 
-{ id:'ZTA-024', title:'Global Administrators use PIM eligibility, not standing access', pillar:'Identity', risk:'High', license:'Entra ID P2',
+{ id:'ZTA-024', title:'Global Administrators use PIM eligibility, not standing access', pillar:'Identity', risk:'High', sfi:'Protect engineering systems', license:'Entra ID P2',
   why:'Permanent GA assignments are standing attack surface; PIM makes them just-in-time.',
   rem:['Convert permanent Global Administrator assignments to PIM-eligible with approval and MFA on activation.'],
   run(D){ if(D.pimGA===undefined) return {status:'skip', detail:'PIM data not readable (missing RoleManagement.Read.Directory or no P2).'};
@@ -572,7 +582,7 @@ const CHECKS = [
     return eligible>0 ? {status:'pass', detail:`${eligible} PIM-eligible Global Administrator assignment(s); ${standing} currently active.`}
       : {status:'fail', detail:`No PIM-eligible Global Administrator assignments — all ${standing} GA assignments are permanent.`}; } },
 
-{ id:'ZTA-025', title:'MFA registration covers at least 95% of users', pillar:'Identity', risk:'Medium',
+{ id:'ZTA-025', title:'MFA registration covers at least 95% of users', pillar:'Identity', risk:'Medium', sfi:'Protect identities and secrets',
   why:'An MFA policy only protects users who have actually registered a method.',
   rem:['Run a registration campaign; target the unregistered users listed in the authentication methods report.'],
   run(D){ if(D.regReport===undefined) return {status:'skip', detail:'Registration report not readable (missing AuditLog.Read.All or insufficient role).'};
@@ -583,7 +593,7 @@ const CHECKS = [
     return pct>=95 ? {status:'pass', detail:`${pct}% of ${total} users are MFA-capable.`}
       : {status:'fail', detail:`Only ${pct}% of ${total} users are MFA-capable (target ≥95%).`}; } },
 
-{ id:'ZTA-101', title:'Intune compliance policies cover the platforms in use', pillar:'Devices', risk:'High', dataset:'compliance',
+{ id:'ZTA-101', title:'Intune compliance policies cover the platforms in use', pillar:'Devices', risk:'High', sfi:'Protect tenants and isolate production systems', dataset:'compliance',
   why:'Device compliance is the anchor for device-based Conditional Access.',
   rem:['Create compliance policies for every managed platform and assign them.'],
   run(D){ if(D.compliance===undefined) return {status:'skip', detail:'Devices pillar not selected (or Intune scope declined).'};
@@ -815,6 +825,7 @@ async function runAssessment(){
 /* ================= REPORT ================= */
 const SL={pass:['pass','Passed'],fail:['fail','Failed'],inv:['inv','Investigate'],skip:['skip','Skipped']};
 let curPillar='Overview', curSt='all';
+const curRisk=new Set(), curSfi=new Set();
 
 function renderReport(){
   const R=RESULTS, cs=R.checks;
@@ -852,6 +863,11 @@ function renderReport(){
       <span class="seg-i" style="width:${i/tot*100}%"></span><span class="seg-s" style="width:${s/tot*100}%"></span>
       </div><span class="pct"><b>${p}/${tot-s}</b> tests</span></div>`;}).join('');
   renderSankeys(R);
+  const sfiBox=$('sfiChips'); sfiBox.innerHTML='';
+  [...new Set(cs.map(c=>c.sfi).filter(Boolean))].sort().forEach(v=>{
+    const ch=document.createElement('span'); ch.className='fchip'; ch.textContent=v;
+    ch.onclick=()=>{ curSfi.has(v)?curSfi.delete(v):curSfi.add(v); ch.classList.toggle('active'); renderRows(); };
+    sfiBox.appendChild(ch); });
   const seg=$('pillarSeg'); seg.innerHTML='';
   ['Overview','All checks',...pillars].forEach(pl=>{const b=document.createElement('button'); b.textContent=pl;
     if(pl===curPillar) b.className='active';
@@ -860,7 +876,7 @@ function renderReport(){
 }
 function gotoStatus(st){
   curSt=st;
-  document.querySelectorAll('.fchip').forEach(x=>x.classList.toggle('active', x.dataset.st===st));
+  document.querySelectorAll('.fchip[data-st]').forEach(x=>x.classList.toggle('active', x.dataset.st===st));
   setTab('All checks');
   window.scrollTo(0,0);
 }
@@ -924,12 +940,25 @@ function setTab(pl, btn){
   const ov=pl==='Overview';
   $('ovDash').style.display=ov?'':'none';
   $('checksView').style.display=ov?'none':'';
-  if(!ov) renderRows();
+  if(!ov){
+    const GUIDES={
+      Identity:[['Configuring Microsoft Entra for increased security','https://learn.microsoft.com/en-us/entra/fundamentals/configure-security']],
+      Devices:[['Configuring Microsoft Intune for increased security','https://learn.microsoft.com/en-us/intune/intune-service/protect/zero-trust-configure-security']]};
+    const g=GUIDES[pl]||[].concat(...Object.values(GUIDES));
+    $('pillarIntro').innerHTML=`<h3 style="margin-bottom:6px">${pl}</h3>
+      <p class="mini">The results presented below are based on the security principles detailed in the ${
+        g.map(([t,u])=>`<a href="${u}" target="_blank" rel="noopener">${t}</a>`).join(' and ')} guide${g.length>1?'s':''}.</p>`;
+    renderRows();
+  }
 }
 function renderRows(){
   const q=($('q').value||'').toLowerCase(), tb=$('rows'); tb.innerHTML='';
-  RESULTS.checks.filter(c=>(curPillar==='Overview'||curPillar==='All checks'||c.pillar===curPillar)&&(curSt==='all'||c.status===curSt)
-      &&(!q||c.title.toLowerCase().includes(q)||c.id.toLowerCase().includes(q)))
+  const inScope=RESULTS.checks.filter(c=>curPillar==='Overview'||curPillar==='All checks'||c.pillar===curPillar);
+  const shown=inScope.filter(c=>(curSt==='all'||c.status===curSt)
+      &&(!curRisk.size||curRisk.has(c.risk))&&(!curSfi.size||curSfi.has(c.sfi))
+      &&(!q||c.title.toLowerCase().includes(q)||c.id.toLowerCase().includes(q)));
+  $('showCount').textContent=`Showing ${shown.length} of ${inScope.length} tests`;
+  shown
     .forEach(c=>{const tr=document.createElement('tr');
       tr.innerHTML=`<td><div class="tname">${esc(c.title)}</div><div class="tid">${c.id}</div></td>
         <td>${c.pillar}</td><td><span class="risk ${c.risk}">${c.risk}</span></td>
@@ -1113,8 +1142,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('driftFile').addEventListener('change',ev=>{ const f=ev.target.files[0]; if(!f)return;
     const rd=new FileReader(); rd.onload=()=>{ try{ renderDrift(JSON.parse(rd.result), f.name); }catch(e){ $('driftOut').textContent='Not a valid results JSON.'; } }; rd.readAsText(f); });
   $('q').addEventListener('input',renderRows);
-  document.querySelectorAll('.fchip').forEach(ch=>ch.onclick=()=>{ curSt=ch.dataset.st;
-    document.querySelectorAll('.fchip').forEach(x=>x.classList.remove('active')); ch.classList.add('active'); renderRows(); });
+  document.querySelectorAll('.fchip[data-st]').forEach(ch=>ch.onclick=()=>{ curSt=ch.dataset.st;
+    document.querySelectorAll('.fchip[data-st]').forEach(x=>x.classList.remove('active')); ch.classList.add('active'); renderRows(); });
+  document.querySelectorAll('.fchip[data-risk]').forEach(ch=>ch.onclick=()=>{ const v=ch.dataset.risk;
+    curRisk.has(v)?curRisk.delete(v):curRisk.add(v); ch.classList.toggle('active'); renderRows(); });
   $('ovl').onclick=closeDrawer; $('dcloseBtn').onclick=closeDrawer;
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeDrawer(); closeModal('spModal'); closeModal('driftModal'); }});
   if(DEMO_MODE){ $('tenantName').textContent='Contoso B.V. (demo)'; $('tenantUser').textContent='demo@contoso.nl';
